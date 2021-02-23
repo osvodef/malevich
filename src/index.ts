@@ -1,12 +1,9 @@
-import {
-    getBound,
-    lngLatToMercator,
-    mercatorToTileCount,
-    monochromize,
-    projectPoint,
-} from './utils';
+import { getBound, lngLatToMercator, mercatorToTileCount, projectPoint } from './utils';
+import { convolutionRadius, targetZoom, tileSize } from './constants';
 import { FeatureCollection, Polygon } from 'geojson';
-import { quality, targetZoom, tileSize } from './constants';
+import { convolute } from './convolution';
+import parse from 'parse-svg-path';
+import potrace from 'potrace';
 
 async function run() {
     const geojson: FeatureCollection<Polygon> = await fetch('./woods.geojson').then(response =>
@@ -30,8 +27,8 @@ async function run() {
     const width = bound.maxX - bound.minX;
     const height = bound.maxY - bound.minY;
 
-    const canvasWidth = Math.ceil(quality * tileSize * mercatorToTileCount(width, targetZoom));
-    const canvasHeight = Math.ceil(quality * tileSize * mercatorToTileCount(height, targetZoom));
+    const canvasWidth = Math.ceil(tileSize * mercatorToTileCount(width, targetZoom));
+    const canvasHeight = Math.ceil(tileSize * mercatorToTileCount(height, targetZoom));
 
     const canvas = document.createElement('canvas');
     canvas.width = canvasWidth;
@@ -68,15 +65,32 @@ async function run() {
     }
 
     const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
-    const pixels = imageData.data;
 
-    for (let i = 0; i < pixels.length; i += 4) {
-        pixels[i + 0] = monochromize(pixels[i + 0]);
-        pixels[i + 1] = monochromize(pixels[i + 1]);
-        pixels[i + 2] = monochromize(pixels[i + 2]);
-    }
+    convolute(imageData, convolutionRadius);
 
-    ctx.putImageData(imageData, 0, 0);
+    const outputCanvas = document.createElement('canvas');
+    outputCanvas.width = canvasWidth;
+    outputCanvas.height = canvasHeight;
+    document.body.appendChild(outputCanvas);
+
+    const outputCtx = outputCanvas.getContext('2d') as CanvasRenderingContext2D;
+    outputCtx.putImageData(imageData, 0, 0);
+
+    const tracer = new potrace.Potrace();
+
+    tracer.loadImage(outputCanvas.toDataURL(), () => {
+        tracer.setParameters({
+            alphaMax: 0,
+            optCurve: false,
+            blackOnWhite: false,
+            threshold: 127,
+            turdSize: (2 * convolutionRadius + 1) ** 2,
+        });
+
+        const path = tracer.getPathTag().split('"')[1];
+
+        parse(path);
+    });
 }
 
 run();

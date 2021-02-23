@@ -62,7 +62,3 @@ export function lngLatToMercator(lngLat: Point): Point {
         (180 - (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))) / 360,
     ];
 }
-
-export function monochromize(color: number): number {
-    return color > 127 ? 255 : 0;
-}
