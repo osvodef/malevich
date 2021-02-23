@@ -11,6 +11,7 @@ declare module 'potrace' {
         loadImage(image: NodeCanvasImageData, callback: () => void): void;
         setParameters(params: Params): void;
         getPathTag(): string;
+        getSVG(): string;
     }
 }
 

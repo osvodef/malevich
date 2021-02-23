@@ -20,6 +20,21 @@ export function projectPoint(
     ];
 }
 
+export function unprojectPoint(
+    point: Point,
+    bound: Bound,
+    canvasWidth: number,
+    canvasHeight: number,
+): Point {
+    const width = bound.maxX - bound.minX;
+    const height = bound.maxY - bound.minY;
+
+    return [
+        (point[0] / canvasWidth) * width + bound.minX,
+        (point[1] / canvasHeight) * height + bound.minY,
+    ];
+}
+
 export function getBound(polygons: Array<Feature<Polygon>>): Bound {
     let minX = Infinity;
     let maxX = -Infinity;
@@ -61,4 +76,28 @@ export function lngLatToMercator(lngLat: Point): Point {
         (180 + lng) / 360,
         (180 - (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))) / 360,
     ];
+}
+
+export function mercatorToLngLat(point: Point): Point {
+    const x = point[0];
+    const y = point[1];
+
+    const y2 = 180 - y * 360;
+
+    return [x * 360 - 180, (360 / Math.PI) * Math.atan(Math.exp((y2 * Math.PI) / 180)) - 90];
+}
+
+export function createSvg(path: string, width: number, height: number): string {
+    return `
+        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" version="1.1">
+            <rect width="${width}" height="${height}" fill="black" />
+            <path d="${path}" stroke="none" fill="white" fill-rule="evenodd" />
+        </svg>
+    `;
+}
+
+export function toPrecision(point: Point, precision: number): Point {
+    const factor = 10 ** precision;
+
+    return [Math.round(point[0] * factor) / factor, Math.round(point[1] * factor) / factor];
 }
