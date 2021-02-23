@@ -1,5 +1,5 @@
 import { getBound, lngLatToMercator, mercatorToTileCount, projectPoint } from './utils';
-import { convolutionRadius, targetZoom, tileSize } from './constants';
+import { convolutionRadius, targetZoom, tileRasterSize, turdSize } from './constants';
 import { FeatureCollection, Polygon } from 'geojson';
 import { convolute } from './convolution';
 import parse from 'parse-svg-path';
@@ -27,8 +27,8 @@ async function run() {
     const width = bound.maxX - bound.minX;
     const height = bound.maxY - bound.minY;
 
-    const canvasWidth = Math.ceil(tileSize * mercatorToTileCount(width, targetZoom));
-    const canvasHeight = Math.ceil(tileSize * mercatorToTileCount(height, targetZoom));
+    const canvasWidth = Math.ceil(tileRasterSize * mercatorToTileCount(width, targetZoom));
+    const canvasHeight = Math.ceil(tileRasterSize * mercatorToTileCount(height, targetZoom));
 
     const canvas = document.createElement('canvas');
     canvas.width = canvasWidth;
@@ -84,7 +84,7 @@ async function run() {
             optCurve: false,
             blackOnWhite: false,
             threshold: 127,
-            turdSize: (2 * convolutionRadius + 1) ** 2,
+            turdSize,
         });
 
         const path = tracer.getPathTag().split('"')[1];
