@@ -8,14 +8,15 @@ declare module 'potrace' {
     }
 
     export class Potrace {
-        loadImage(url: string, callback: () => void): void;
+        loadImage(image: NodeCanvasImageData, callback: () => void): void;
         setParameters(params: Params): void;
         getPathTag(): string;
     }
 }
 
 declare module 'parse-svg-path' {
-    interface ParsedPath {}
+    type ControlPoint = [string, number, number];
+    type ParsedPath = ControlPoint[];
 
     export default function parse(path: string): ParsedPath;
 }
