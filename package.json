@@ -23,6 +23,7 @@
     "dependencies": {
         "canvas": "^2.6.1",
         "parse-svg-path": "^0.1.2",
-        "potrace": "^2.1.8"
+        "potrace": "^2.1.8",
+        "simplify-js": "^1.2.4"
     }
 }

@@ -1,6 +1,12 @@
-import { convolutionRadius, targetZoom, tileRasterSize } from './constants';
+import {
+    convolutionRadius,
+    simplificationTolerance,
+    targetZoom,
+    tileRasterSize,
+} from './constants';
 import { FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 import { convolute } from './convolution';
+import { simplifyRing } from './simplify';
 import { createGeoJson } from './geojson';
 import { performance } from 'perf_hooks';
 import { createCanvas } from 'canvas';
@@ -124,8 +130,10 @@ async function run() {
     let outputRingCount = 0;
     let outputVertexCount = 0;
 
-    for (const ring of outputPolygon.geometry.coordinates) {
-        outputRingCount++;
+    const { coordinates } = outputPolygon.geometry;
+
+    for (let i = 0; i < coordinates.length; i++) {
+        const ring = simplifyRing(coordinates[i], simplificationTolerance);
 
         for (let i = 0; i < ring.length; i++) {
             outputVertexCount++;
@@ -136,6 +144,8 @@ async function run() {
 
             ring[i] = toPrecision(point, 7);
         }
+
+        coordinates[i] = ring;
     }
 
     const tracingTime = performance.now() - tracingStartTime;
