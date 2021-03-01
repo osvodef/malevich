@@ -5,3 +5,11 @@ export interface Bound {
     minY: number;
     maxY: number;
 }
+export interface BoundInfo {
+    widthPx: number;
+    heightPx: number;
+    widthM: number;
+    heightM: number;
+    widthTiles: number;
+    heightTiles: number;
+}

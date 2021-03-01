@@ -1,5 +1,6 @@
-import { Feature, Polygon } from 'geojson';
-import { Bound, Point } from './types';
+import { Feature, MultiPolygon, Polygon } from 'geojson';
+import { targetZoom, tileRasterSize } from './constants';
+import { Bound, BoundInfo, Point } from './types';
 
 export function mercatorToTileCount(mercator: number, zoom: number) {
     return mercator * 2 ** zoom;
@@ -35,31 +36,36 @@ export function unprojectPoint(
     ];
 }
 
-export function getBound(polygons: Array<Feature<Polygon>>): Bound {
+export function getBound(polygons: Array<Feature<Polygon | MultiPolygon>>): Bound {
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
 
     for (const polygon of polygons) {
-        const rings = polygon.geometry.coordinates;
+        const { geometry } = polygon;
 
-        for (const ring of rings) {
-            for (const point of ring) {
-                if (point[0] < minX) {
-                    minX = point[0];
-                }
+        const ringSets =
+            geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
 
-                if (point[0] > maxX) {
-                    maxX = point[0];
-                }
+        for (const ringSet of ringSets) {
+            for (const ring of ringSet) {
+                for (const point of ring) {
+                    if (point[0] < minX) {
+                        minX = point[0];
+                    }
 
-                if (point[1] < minY) {
-                    minY = point[1];
-                }
+                    if (point[0] > maxX) {
+                        maxX = point[0];
+                    }
 
-                if (point[1] > maxY) {
-                    maxY = point[1];
+                    if (point[1] < minY) {
+                        minY = point[1];
+                    }
+
+                    if (point[1] > maxY) {
+                        maxY = point[1];
+                    }
                 }
             }
         }
@@ -100,4 +106,33 @@ export function toPrecision(point: Point, precision: number): Point {
     const factor = 10 ** precision;
 
     return [Math.round(point[0] * factor) / factor, Math.round(point[1] * factor) / factor];
+}
+
+export function getBoundInfo(bound: Bound): BoundInfo {
+    const widthMercator = bound.maxX - bound.minX;
+    const heightMercator = bound.maxY - bound.minY;
+
+    const widthTiles = mercatorToTileCount(widthMercator, targetZoom);
+    const heightTiles = mercatorToTileCount(heightMercator, targetZoom);
+
+    const widthPx = Math.ceil(tileRasterSize * widthTiles);
+    const heightPx = Math.ceil(tileRasterSize * heightTiles);
+
+    const center = mercatorToLngLat([(bound.minX + bound.maxX) / 2, (bound.minY + bound.maxY) / 2]);
+
+    const scaleFactor = Math.cos((center[1] * Math.PI) / 180);
+    const earthRadius = 6371008.8;
+    const earthCircumference = 2 * Math.PI * earthRadius;
+
+    const widthM = widthMercator * scaleFactor * earthCircumference;
+    const heightM = heightMercator * scaleFactor * earthCircumference;
+
+    return {
+        widthPx,
+        heightPx,
+        widthM,
+        heightM,
+        widthTiles: Math.ceil(widthTiles),
+        heightTiles: Math.ceil(heightTiles),
+    };
 }
