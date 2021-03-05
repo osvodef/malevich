@@ -1,6 +1,5 @@
 import { Feature, MultiPolygon, Polygon } from 'geojson';
-import { targetZoom, tileRasterSize } from './constants';
-import { Bound, BoundInfo, Point } from './types';
+import { Bound, Coords, Point } from './types';
 
 export function mercatorToTileCount(mercator: number, zoom: number) {
     return mercator * 2 ** zoom;
@@ -108,31 +107,6 @@ export function toPrecision(point: Point, precision: number): Point {
     return [Math.round(point[0] * factor) / factor, Math.round(point[1] * factor) / factor];
 }
 
-export function getBoundInfo(bound: Bound): BoundInfo {
-    const widthMercator = bound.maxX - bound.minX;
-    const heightMercator = bound.maxY - bound.minY;
-
-    const widthTiles = mercatorToTileCount(widthMercator, targetZoom);
-    const heightTiles = mercatorToTileCount(heightMercator, targetZoom);
-
-    const widthPx = Math.ceil(tileRasterSize * widthTiles);
-    const heightPx = Math.ceil(tileRasterSize * heightTiles);
-
-    const center = mercatorToLngLat([(bound.minX + bound.maxX) / 2, (bound.minY + bound.maxY) / 2]);
-
-    const scaleFactor = Math.cos((center[1] * Math.PI) / 180);
-    const earthRadius = 6371008.8;
-    const earthCircumference = 2 * Math.PI * earthRadius;
-
-    const widthM = widthMercator * scaleFactor * earthCircumference;
-    const heightM = heightMercator * scaleFactor * earthCircumference;
-
-    return {
-        widthPx,
-        heightPx,
-        widthM,
-        heightM,
-        widthTiles: Math.ceil(widthTiles),
-        heightTiles: Math.ceil(heightTiles),
-    };
+export function coordsToKey(coords: Coords): string {
+    return `${coords[0]}_${coords[1]}_${coords[2]}`;
 }

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Malevich</title>
+        <meta charset="utf-8" />
+        <style>
+            html,
+            body {
+                padding: 0;
+                margin: 0;
+                font-family: monospace;
+                font-size: 16px;
+                box-sizing: border-box;
+            }
+
+            .tile-card {
+                width: 300px;
+                border: 1px solid #ccc;
+                padding: 10px;
+                margin: 10px;
+                display: inline-block;
+                cursor: pointer;
+            }
+
+            .tile-key {
+                font-size: 32px;
+                font-weight: bold;
+                margin-bottom: 10px;
+            }
+
+            .tile-table {
+                width: 100%;
+            }
+
+            .table-header {
+                font-weight: bold;
+            }
+
+            .checkbox {
+                margin: 10px;
+            }
+
+            .map {
+                width: calc(100% - 20px);
+                height: 750px;
+                margin: 10px;
+            }
+        </style>
+
+        <script src="https://api.mapbox.com/mapbox-gl-js/v2.1.1/mapbox-gl.js"></script>
+        <link href="https://api.mapbox.com/mapbox-gl-js/v2.1.1/mapbox-gl.css" rel="stylesheet" />
+    </head>
+    <body>
+        <div class="cards"></div>
+        <div class="checkbox">
+            <input type="checkbox" id="checkbox" name="checkbox" />
+            <label for="checkbox">Show original woods</label>
+        </div>
+        <div class="map"></div>
+
+        <script>
+            const accessToken =
+                'Fcl36Sb9lU5ynhsN8ofA47SqaVDPAlnG5b669b1f243a48e40fd719fef7b80ecbe75a54da';
+            const mapboxAccessToken =
+                'pk.eyJ1Ijoib3N2b2RlZiIsImEiOiJjazNwbjNlMWUwNGtkM2Vtb253MjM3cXhvIn0.A9Qebgu0gf2BlndYixeeOw';
+
+            run();
+
+            async function run() {
+                const tiles = await fetch('./dist/tiles.json').then(response => response.json());
+                const keys = tiles.map(coords => coords.join('_'));
+
+                const stats = {};
+                const geojsons = {};
+
+                for (const key of keys) {
+                    stats[key] = await fetch(`./dist/${key}/stats.json`).then(response =>
+                        response.json(),
+                    );
+
+                    geojsons[key] = await fetch(`./dist/${key}/output.geojson`).then(response =>
+                        response.json(),
+                    );
+                }
+
+                let html = '';
+
+                for (const key in stats) {
+                    html += getTileCardHtml(key, stats[key]);
+                }
+
+                document.querySelector('.cards').innerHTML = html;
+
+                mapboxgl.accessToken = mapboxAccessToken;
+
+                const map = new mapboxgl.Map({
+                    container: document.querySelector('.map'),
+                    zoom: 4,
+                    center: [13.1, 48.23],
+                    transformRequest: url => {
+                        return { url: transformResourceUrl(url) };
+                    },
+                });
+
+                const mapstyle = await fetch(
+                    `https://vapi.mc-cdn.io/styles/Base%20Carto.json?access_token=${accessToken}`,
+                ).then(response => response.json());
+
+                const woodsLayer = mapstyle.layers.find(layer => layer.id === 'Landuse-wood');
+
+                woodsLayer.paint['fill-opacity'] = 0;
+
+                map.setStyle(mapstyle);
+                map.showTileBoundaries = true;
+
+                await new Promise(resolve => map.on('style.load', resolve));
+
+                for (const key in geojsons) {
+                    const geojson = geojsons[key];
+
+                    map.addSource(key, {
+                        type: 'geojson',
+                        data: geojson,
+                    });
+
+                    map.addLayer(
+                        {
+                            id: key,
+                            type: 'fill',
+                            source: key,
+                            layout: {},
+                            paint: {
+                                'fill-color': woodsLayer.paint['fill-color'],
+                                'fill-antialias': false,
+                            },
+                        },
+                        'Landuse-wood',
+                    );
+                }
+
+                document.querySelector('#checkbox').addEventListener('input', e => {
+                    if (e.target.checked) {
+                        map.setPaintProperty('Landuse-wood', 'fill-opacity', 1);
+
+                        for (const key in geojsons) {
+                            map.setPaintProperty(key, 'fill-opacity', 0);
+                        }
+                    } else {
+                        map.setPaintProperty('Landuse-wood', 'fill-opacity', 0);
+
+                        for (const key in geojsons) {
+                            map.setPaintProperty(key, 'fill-opacity', 1);
+                        }
+                    }
+                });
+
+                document.querySelectorAll('.tile-card').forEach(element => {
+                    element.addEventListener('click', () => {
+                        const coords = element.dataset.key.split('_');
+
+                        const x = Number(coords[1]);
+                        const y = Number(coords[2]);
+                        const zoom = Number(coords[0]);
+                        const tileSize = 1 / 2 ** zoom;
+
+                        const mercator = new mapboxgl.MercatorCoordinate(
+                            (x + 0.5) * tileSize,
+                            (y + 0.5) * tileSize,
+                        );
+
+                        const lngLat = mercator.toLngLat();
+
+                        map.setMinZoom(-2);
+                        map.setMaxZoom(Infinity);
+
+                        map.setZoom(zoom);
+                        map.setMinZoom(zoom);
+                        map.setMaxZoom(zoom + 1);
+
+                        map.setCenter(lngLat);
+                    });
+                });
+
+                window.map = map;
+            }
+
+            function getTileCardHtml(key, stats) {
+                const {
+                    inputRingCount,
+                    outputRingCount,
+                    inputVertexCount,
+                    outputVertexCount,
+                    rasterTime,
+                    tracingTime,
+                    convolutionTime,
+                    simplificationTime,
+                } = stats;
+
+                const time = rasterTime + convolutionTime + tracingTime + simplificationTime;
+
+                const ringRatio = (outputRingCount / inputRingCount) * 100;
+                const ringRatioPercent = ringRatio.toFixed(0);
+
+                const vertexRatio = (outputVertexCount / inputVertexCount) * 100;
+                const vertexRatioPercent = vertexRatio.toFixed(0);
+
+                return `
+                    <div class="tile-card" data-key="${key}">
+                        <div class="tile-key">${key}</div>
+
+                        <table class="tile-table">
+                            <tr>
+                                <td class="table-header">Time:</td>
+                                <td>${formatNumber(time)}ms</td>
+                            </tr>
+                            <tr>
+                                <td class="table-header">Rings:</td>
+                                <td>${formatNumber(inputRingCount)} → ${formatNumber(
+                    outputRingCount,
+                )} (${ringRatioPercent}%)</td>
+                            </tr>
+                            <tr>
+                                <td class="table-header">Vertices:</td>
+                                <td>${formatNumber(inputVertexCount)} → ${formatNumber(
+                    outputVertexCount,
+                )} (${vertexRatioPercent}%)</td>
+                            </tr>
+                        </table>
+                    </div>
+                `;
+            }
+
+            function formatNumber(x) {
+                return x.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+            }
+
+            function transformResourceUrl(url) {
+                url = url.replace('maps4news.com', 'mapcreator.io');
+                url = url.replace(/vapi\.(mc-cdn|mapcreator)/, 'vapi.bleeding.$1');
+
+                if (isVapiUrl(url)) {
+                    url = `${url}?access_token=${accessToken}`;
+                }
+
+                return url;
+            }
+
+            function isVapiUrl(url) {
+                return /vapi\..*(mc-cdn|mapcreator)\.io/.test(url);
+            }
+        </script>
+    </body>
+</html>

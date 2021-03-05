@@ -1,105 +1,92 @@
-import {
-    convolutionRadius,
-    simplificationTolerance,
-    targetZoom,
-    tileRasterSize,
-} from './constants';
-import { FeatureCollection, MultiPolygon, Polygon } from 'geojson';
-import { convolute } from './convolution';
-import { simplifyRing } from './simplify';
+import { simplificationTolerance, convolutionRadius, rasterSize, extent, tiles } from './constants';
+import { coordsToKey, createSvg } from './utils';
+import { Feature } from 'mapbox-vector-tile';
 import { createGeoJson } from './geojson';
+import { simplifyRing } from './simplify';
+import { convolute } from './convolution';
 import { performance } from 'perf_hooks';
+import { sync as mkdirp } from 'mkdirp';
 import { createCanvas } from 'canvas';
+import { download } from './download';
+import { parsePath } from './path';
+import { Coords } from './types';
 import { trace } from './trace';
 import * as path from 'path';
 import * as fs from 'fs';
-import {
-    mercatorToTileCount,
-    lngLatToMercator,
-    mercatorToLngLat,
-    unprojectPoint,
-    projectPoint,
-    toPrecision,
-    createSvg,
-    getBound,
-    getBoundInfo,
-} from './utils';
 
 run();
 
-async function run() {
-    const inputPath = path.join(__dirname, '..', 'assets');
-    const outputPath = path.join(__dirname, '..', 'dist');
+async function run(): Promise<void> {
+    for (const coords of tiles) {
+        await generalizeTile(coords);
+    }
 
-    const geojson: FeatureCollection<Polygon | MultiPolygon> = JSON.parse(
-        fs.readFileSync(path.join(inputPath, 'woods.geojson'), 'utf8'),
-    );
+    fs.writeFileSync(path.join(__dirname, '..', 'dist', 'tiles.json'), JSON.stringify(tiles));
+}
 
-    const polygons = geojson.features.filter(feature => {
-        const { type } = feature.geometry;
+async function generalizeTile(coords: Coords): Promise<void> {
+    const tileKey = coordsToKey(coords);
 
-        return type === 'Polygon' || type === 'MultiPolygon';
-    });
+    console.log(`Processing ${tileKey}...`);
+
+    const outputPath = path.join(__dirname, '..', 'dist', tileKey);
+
+    mkdirp(outputPath);
+
+    const tile = await download(coords);
+
+    const polygons = tile.layers.polygons;
+    const woods: Feature[] = [];
+
+    for (let i = 0; i < polygons.length; i++) {
+        const feature = polygons.feature(i);
+
+        if (feature.properties.categ === 'forest') {
+            woods.push(feature);
+        }
+    }
 
     const rasterStartTime = performance.now();
 
     let inputRingCount = 0;
     let inputVertexCount = 0;
+    let outputRingCount = 0;
+    let outputVertexCount = 0;
 
-    for (const polygon of polygons) {
-        const { geometry } = polygon;
+    for (const feature of woods) {
+        const geometry = feature.loadGeometry();
 
-        const ringSets =
-            geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
-
-        for (const ringSet of ringSets) {
-            for (const ring of ringSet) {
-                inputRingCount++;
-                for (let i = 0; i < ring.length; i++) {
-                    inputVertexCount++;
-                    ring[i] = lngLatToMercator(ring[i]);
-                }
-            }
+        for (const ring of geometry) {
+            inputRingCount += 1;
+            inputVertexCount += ring.length;
         }
     }
 
-    const bound = getBound(polygons);
-
-    const width = bound.maxX - bound.minX;
-    const height = bound.maxY - bound.minY;
-
-    const canvasWidth = Math.ceil(tileRasterSize * mercatorToTileCount(width, targetZoom));
-    const canvasHeight = Math.ceil(tileRasterSize * mercatorToTileCount(height, targetZoom));
-
-    const canvas = createCanvas(canvasWidth, canvasHeight);
+    const canvas = createCanvas(rasterSize, rasterSize);
     const ctx = canvas.getContext('2d');
 
     ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    ctx.fillRect(0, 0, rasterSize, rasterSize);
 
-    for (const polygon of polygons) {
-        const { geometry } = polygon;
-
-        const ringSets =
-            geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+    for (const feature of woods) {
+        const geometry = feature.loadGeometry();
 
         ctx.beginPath();
 
-        for (const ringSet of ringSets) {
-            for (const ring of ringSet) {
-                for (let i = 0; i < ring.length; i++) {
-                    const point = ring[i];
-                    const canvasPoint = projectPoint(point, bound, canvasWidth, canvasHeight);
+        for (const ring of geometry) {
+            for (let i = 0; i < ring.length; i++) {
+                const point = ring[i];
+                const x = (point.x / extent) * rasterSize;
+                const y = (point.y / extent) * rasterSize;
 
-                    if (i === 0) {
-                        ctx.moveTo(canvasPoint[0], canvasPoint[1]);
-                    } else {
-                        ctx.lineTo(canvasPoint[0], canvasPoint[1]);
-                    }
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
                 }
-
-                ctx.closePath();
             }
+
+            ctx.closePath();
         }
 
         ctx.fillStyle = '#ffffff';
@@ -112,7 +99,7 @@ async function run() {
 
     const convolutionStartTime = performance.now();
 
-    const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+    const imageData = ctx.getImageData(0, 0, rasterSize, rasterSize);
 
     convolute(imageData, convolutionRadius);
 
@@ -125,43 +112,32 @@ async function run() {
     const tracingStartTime = performance.now();
 
     const traced = await trace(imageData);
-    const outputPolygon = createGeoJson(traced);
-
-    let outputRingCount = 0;
-    let outputVertexCount = 0;
-
-    const { coordinates } = outputPolygon.geometry;
-
-    for (let i = 0; i < coordinates.length; i++) {
-        const ring = simplifyRing(coordinates[i], simplificationTolerance);
-
-        for (let i = 0; i < ring.length; i++) {
-            outputVertexCount++;
-
-            const point = mercatorToLngLat(
-                unprojectPoint(ring[i], bound, canvasWidth, canvasHeight),
-            );
-
-            ring[i] = toPrecision(point, 7);
-        }
-
-        coordinates[i] = ring;
-    }
+    const rings = parsePath(traced);
 
     const tracingTime = performance.now() - tracingStartTime;
 
+    const simplificationStartTime = performance.now();
+    const simplifiedRings = rings.map(ring => simplifyRing(ring, simplificationTolerance));
+    const simplificationTime = performance.now() - simplificationStartTime;
+
+    for (const ring of simplifiedRings) {
+        outputRingCount += 1;
+        outputVertexCount += ring.length;
+    }
+
+    const geojson = createGeoJson(simplifiedRings, coords);
+
     fs.writeFileSync(
         path.join(outputPath, 'traced.svg'),
-        createSvg(traced, canvasWidth, canvasHeight),
+        createSvg(traced, rasterSize, rasterSize),
     );
-
-    fs.writeFileSync(path.join(outputPath, 'output.geojson'), JSON.stringify(outputPolygon));
+    fs.writeFileSync(path.join(outputPath, 'output.geojson'), JSON.stringify(geojson, null, 4));
 
     const stats = {
-        ...getBoundInfo(bound),
         rasterTime,
         convolutionTime,
         tracingTime,
+        simplificationTime,
         inputRingCount,
         inputVertexCount,
         outputRingCount,
@@ -169,4 +145,6 @@ async function run() {
     };
 
     fs.writeFileSync(path.join(outputPath, 'stats.json'), JSON.stringify(stats, null, 4));
+
+    console.log(`Finished processing ${tileKey}`);
 }

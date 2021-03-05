@@ -13,7 +13,9 @@
     "license": "ISC",
     "devDependencies": {
         "@types/geojson": "^7946.0.7",
+        "@types/mkdirp": "^1.0.1",
         "@types/node": "^14.14.31",
+        "@types/node-fetch": "^2.5.8",
         "prettier": "^1.19.1",
         "ts-node": "^9.1.1",
         "tslint": "^5.20.1",
@@ -21,8 +23,13 @@
         "typescript": "^3.9.7"
     },
     "dependencies": {
+        "@turf/turf": "^6.3.0",
         "canvas": "^2.6.1",
+        "mapbox-vector-tile": "^0.3.0",
+        "mkdirp": "^1.0.4",
+        "node-fetch": "^2.6.1",
         "parse-svg-path": "^0.1.2",
+        "pbf": "^3.2.1",
         "potrace": "^2.1.8",
         "simplify-js": "^1.2.4"
     }
