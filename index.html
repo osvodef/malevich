@@ -51,11 +51,6 @@
         <link href="https://api.mapbox.com/mapbox-gl-js/v2.1.1/mapbox-gl.css" rel="stylesheet" />
     </head>
     <body>
-        <div class="cards"></div>
-        <div class="checkbox">
-            <input type="checkbox" id="checkbox" name="checkbox" />
-            <label for="checkbox">Show original woods</label>
-        </div>
         <div class="map"></div>
 
         <script>
@@ -67,30 +62,6 @@
             run();
 
             async function run() {
-                const tiles = await fetch('./dist/tiles.json').then(response => response.json());
-                const keys = tiles.map(coords => coords.join('_'));
-
-                const stats = {};
-                const geojsons = {};
-
-                for (const key of keys) {
-                    stats[key] = await fetch(`./dist/${key}/stats.json`).then(response =>
-                        response.json(),
-                    );
-
-                    geojsons[key] = await fetch(`./dist/${key}/output.geojson`).then(response =>
-                        response.json(),
-                    );
-                }
-
-                let html = '';
-
-                for (const key in stats) {
-                    html += getTileCardHtml(key, stats[key]);
-                }
-
-                document.querySelector('.cards').innerHTML = html;
-
                 mapboxgl.accessToken = mapboxAccessToken;
 
                 const map = new mapboxgl.Map({
@@ -115,71 +86,26 @@
 
                 await new Promise(resolve => map.on('style.load', resolve));
 
-                for (const key in geojsons) {
-                    const geojson = geojsons[key];
+                map.addSource('test', {
+                    type: 'vector',
+                    minzoom: 0,
+                    maxzoom: 5,
+                    tiles: ['http://localhost:8080/dist/{z}_{x}_{y}.pbf'],
+                });
 
-                    map.addSource(key, {
-                        type: 'geojson',
-                        data: geojson,
-                    });
-
-                    map.addLayer(
-                        {
-                            id: key,
-                            type: 'fill',
-                            source: key,
-                            layout: {},
-                            paint: {
-                                'fill-color': woodsLayer.paint['fill-color'],
-                                'fill-antialias': false,
-                            },
+                map.addLayer(
+                    {
+                        id: 'test',
+                        type: 'fill',
+                        source: 'test',
+                        'source-layer': 'polygons',
+                        paint: {
+                            'fill-antialias': false,
+                            'fill-color': '#ff0000',
                         },
-                        'Landuse-wood',
-                    );
-                }
-
-                document.querySelector('#checkbox').addEventListener('input', e => {
-                    if (e.target.checked) {
-                        map.setPaintProperty('Landuse-wood', 'fill-opacity', 1);
-
-                        for (const key in geojsons) {
-                            map.setPaintProperty(key, 'fill-opacity', 0);
-                        }
-                    } else {
-                        map.setPaintProperty('Landuse-wood', 'fill-opacity', 0);
-
-                        for (const key in geojsons) {
-                            map.setPaintProperty(key, 'fill-opacity', 1);
-                        }
-                    }
-                });
-
-                document.querySelectorAll('.tile-card').forEach(element => {
-                    element.addEventListener('click', () => {
-                        const coords = element.dataset.key.split('_');
-
-                        const x = Number(coords[1]);
-                        const y = Number(coords[2]);
-                        const zoom = Number(coords[0]);
-                        const tileSize = 1 / 2 ** zoom;
-
-                        const mercator = new mapboxgl.MercatorCoordinate(
-                            (x + 0.5) * tileSize,
-                            (y + 0.5) * tileSize,
-                        );
-
-                        const lngLat = mercator.toLngLat();
-
-                        map.setMinZoom(-2);
-                        map.setMaxZoom(Infinity);
-
-                        map.setZoom(zoom);
-                        map.setMinZoom(zoom);
-                        map.setMaxZoom(zoom + 1);
-
-                        map.setCenter(lngLat);
-                    });
-                });
+                    },
+                    'Landuse-wood',
+                );
 
                 window.map = map;
             }

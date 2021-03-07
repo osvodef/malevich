@@ -1,41 +1,69 @@
-import { simplificationTolerance, convolutionRadius, rasterSize, extent, tiles } from './constants';
-import { coordsToKey, createSvg } from './utils';
+import { coordsToKey, lngLatToMercator } from './utils';
 import { Feature } from 'mapbox-vector-tile';
 import { createGeoJson } from './geojson';
 import { simplifyRing } from './simplify';
 import { convolute } from './convolution';
 import { performance } from 'perf_hooks';
-import { sync as mkdirp } from 'mkdirp';
+import { fromGeojsonVt } from 'vt-pbf';
 import { createCanvas } from 'canvas';
 import { download } from './download';
 import { parsePath } from './path';
+import geojsonvt from 'geojson-vt';
 import { Coords } from './types';
 import { trace } from './trace';
 import * as path from 'path';
 import * as fs from 'fs';
+import {
+    simplificationTolerance,
+    convolutionRadius,
+    rasterSize,
+    padding,
+    extent,
+    minZoom,
+    maxZoom,
+    minLon,
+    maxLat,
+    maxLon,
+    minLat,
+} from './constants';
 
 run();
 
 async function run(): Promise<void> {
-    for (const coords of tiles) {
-        await generalizeTile(coords);
-    }
+    const [minX, minY] = lngLatToMercator([minLon, maxLat]);
+    const [maxX, maxY] = lngLatToMercator([maxLon, minLat]);
 
-    fs.writeFileSync(path.join(__dirname, '..', 'dist', 'tiles.json'), JSON.stringify(tiles));
+    for (let zoom = minZoom; zoom <= maxZoom; zoom++) {
+        const tileSize = 1 / 2 ** zoom;
+
+        const minXCoord = Math.floor(minX / tileSize);
+        const minYCoord = Math.floor(minY / tileSize);
+        const maxXCoord = Math.floor(maxX / tileSize);
+        const maxYCoord = Math.floor(maxY / tileSize);
+
+        for (let x = minXCoord; x <= maxXCoord; x++) {
+            for (let y = minYCoord; y <= maxYCoord; y++) {
+                await generalizeTile([zoom, x, y]);
+            }
+        }
+    }
 }
 
 async function generalizeTile(coords: Coords): Promise<void> {
+    const startTime = performance.now();
+
+    const zoom = coords[0];
+    const x = coords[1];
+    const y = coords[2];
+
+    process.stdout.write(`Processing ${coords[0]}/${coords[1]}/${coords[2]}... `);
+
     const tileKey = coordsToKey(coords);
+    const outputPath = path.join(__dirname, '..', 'dist');
 
-    console.log(`Processing ${tileKey}...`);
+    const input = await download(coords);
 
-    const outputPath = path.join(__dirname, '..', 'dist', tileKey);
-
-    mkdirp(outputPath);
-
-    const tile = await download(coords);
-
-    const polygons = tile.layers.polygons;
+    const polygons = input.layers.polygons;
     const woods: Feature[] = [];
 
     for (let i = 0; i < polygons.length; i++) {
@@ -46,27 +74,15 @@ async function generalizeTile(coords: Coords): Promise<void> {
         }
     }
 
-    const rasterStartTime = performance.now();
+    const canvasPadding = (padding * rasterSize) / extent;
+    const canvasSize = rasterSize + 2 * canvasPadding;
 
-    let inputRingCount = 0;
-    let inputVertexCount = 0;
-    let outputRingCount = 0;
-    let outputVertexCount = 0;
-
-    for (const feature of woods) {
-        const geometry = feature.loadGeometry();
-
-        for (const ring of geometry) {
-            inputRingCount += 1;
-            inputVertexCount += ring.length;
-        }
-    }
-
-    const canvas = createCanvas(rasterSize, rasterSize);
+    const canvas = createCanvas(canvasSize, canvasSize);
     const ctx = canvas.getContext('2d');
 
+    ctx.antialias = 'none';
     ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, rasterSize, rasterSize);
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
 
     for (const feature of woods) {
         const geometry = feature.loadGeometry();
@@ -76,8 +92,8 @@ async function generalizeTile(coords: Coords): Promise<void> {
         for (const ring of geometry) {
             for (let i = 0; i < ring.length; i++) {
                 const point = ring[i];
-                const x = (point.x / extent) * rasterSize;
-                const y = (point.y / extent) * rasterSize;
+                const x = ((point.x + padding) / extent) * rasterSize;
+                const y = ((point.y + padding) / extent) * rasterSize;
 
                 if (i === 0) {
                     ctx.moveTo(x, y);
@@ -93,58 +109,28 @@ async function generalizeTile(coords: Coords): Promise<void> {
         ctx.fill();
     }
 
-    const rasterTime = performance.now() - rasterStartTime;
-
-    fs.writeFileSync(path.join(outputPath, 'rasterized.png'), canvas.toBuffer());
-
-    const convolutionStartTime = performance.now();
-
-    const imageData = ctx.getImageData(0, 0, rasterSize, rasterSize);
+    const imageData = ctx.getImageData(0, 0, canvasSize, canvasSize);
 
     convolute(imageData, convolutionRadius);
 
     ctx.putImageData(imageData, 0, 0);
 
-    const convolutionTime = performance.now() - convolutionStartTime;
-
-    fs.writeFileSync(path.join(outputPath, 'convoluted.png'), canvas.toBuffer());
-
-    const tracingStartTime = performance.now();
-
     const traced = await trace(imageData);
     const rings = parsePath(traced);
 
-    const tracingTime = performance.now() - tracingStartTime;
-
-    const simplificationStartTime = performance.now();
     const simplifiedRings = rings.map(ring => simplifyRing(ring, simplificationTolerance));
-    const simplificationTime = performance.now() - simplificationStartTime;
-
-    for (const ring of simplifiedRings) {
-        outputRingCount += 1;
-        outputVertexCount += ring.length;
-    }
 
     const geojson = createGeoJson(simplifiedRings, coords);
+    const tileIndex = geojsonvt(geojson, {
+        maxZoom: zoom,
+        tolerance: 0,
+    });
 
-    fs.writeFileSync(
-        path.join(outputPath, 'traced.svg'),
-        createSvg(traced, rasterSize, rasterSize),
-    );
-    fs.writeFileSync(path.join(outputPath, 'output.geojson'), JSON.stringify(geojson, null, 4));
+    const tile = tileIndex.getTile(zoom, x, y);
+    const buffer = fromGeojsonVt({ polygons: tile });
+    fs.writeFileSync(path.join(outputPath, `${tileKey}.pbf`), buffer);
 
-    const stats = {
-        rasterTime,
-        convolutionTime,
-        tracingTime,
-        simplificationTime,
-        inputRingCount,
-        inputVertexCount,
-        outputRingCount,
-        outputVertexCount,
-    };
+    const time = performance.now() - startTime;
 
-    fs.writeFileSync(path.join(outputPath, 'stats.json'), JSON.stringify(stats, null, 4));
-
-    console.log(`Finished processing ${tileKey}`);
+    console.log(`finished in ${time.toFixed(0)}ms.`);
 }

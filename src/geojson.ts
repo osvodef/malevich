@@ -1,7 +1,7 @@
 import { Coords, Point, Ring } from './types';
 import { mercatorToLngLat } from './utils';
 import { Feature, MultiPolygon, Polygon } from 'geojson';
-import { rasterSize } from './constants';
+import { extent, padding, rasterSize } from './constants';
 import * as turf from '@turf/turf';
 
 export function createGeoJson(input: Ring[], coords: Coords): Feature<MultiPolygon> {
@@ -56,10 +56,11 @@ export function createGeoJson(input: Ring[], coords: Coords): Feature<MultiPolyg
 function unproject(point: Point, coords: Coords): Point {
     const [zoom, x, y] = coords;
     const tileSize = 1 / 2 ** zoom;
+    const canvasPadding = (padding * rasterSize) / extent;
 
     return mercatorToLngLat([
-        (x + point[0] / rasterSize) * tileSize,
-        (y + point[1] / rasterSize) * tileSize,
+        (x + (point[0] - canvasPadding) / rasterSize) * tileSize,
+        (y + (point[1] - canvasPadding) / rasterSize) * tileSize,
     ]);
 }
 

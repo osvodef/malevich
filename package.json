@@ -25,12 +25,14 @@
     "dependencies": {
         "@turf/turf": "^6.3.0",
         "canvas": "^2.6.1",
+        "geojson-vt": "^3.2.1",
         "mapbox-vector-tile": "^0.3.0",
         "mkdirp": "^1.0.4",
         "node-fetch": "^2.6.1",
         "parse-svg-path": "^0.1.2",
         "pbf": "^3.2.1",
         "potrace": "^2.1.8",
-        "simplify-js": "^1.2.4"
+        "simplify-js": "^1.2.4",
+        "vt-pbf": "^3.1.1"
     }
 }
