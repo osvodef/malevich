@@ -1,24 +1,13 @@
-import { coordsToKey, lngLatToMercator } from './utils';
-import { Feature } from 'mapbox-vector-tile';
-import { createGeoJson } from './geojson';
-import { simplifyRing } from './simplify';
-import { convolute } from './convolution';
-import { performance } from 'perf_hooks';
-import { fromGeojsonVt } from 'vt-pbf';
-import { createCanvas } from 'canvas';
-import { download } from './download';
-import { parsePath } from './path';
-import geojsonvt from 'geojson-vt';
-import { Coords } from './types';
-import { trace } from './trace';
+import { fnv32b, formatPercent, lngLatToMercator } from './utils';
+import { Coords, Settings, Telemetry, Tileset } from './types';
+import farm from 'worker-farm';
 import * as path from 'path';
 import * as fs from 'fs';
 import {
     simplificationTolerance,
     convolutionRadius,
     rasterSize,
-    padding,
-    extent,
+    turdSize,
     minZoom,
     maxZoom,
     minLon,
@@ -27,11 +16,40 @@ import {
     minLat,
 } from './constants';
 
+const distPath = path.join(__dirname, '..', 'dist');
+const workers = farm(require.resolve('./generalize'));
+
 run();
 
 async function run(): Promise<void> {
+    const settings: Settings = {
+        minZoom,
+        maxZoom,
+        bound: {
+            minX: minLon,
+            maxX: maxLon,
+            minY: minLat,
+            maxY: maxLat,
+        },
+
+        turdSize,
+        rasterSize,
+        convolutionRadius,
+        simplificationTolerance,
+    };
+
+    const id = fnv32b(JSON.stringify(settings));
+    const outputPath = path.join(distPath, id);
+
+    if (fs.existsSync(outputPath)) {
+        fs.rmdirSync(outputPath, { recursive: true });
+    }
+    fs.mkdirSync(outputPath);
+
     const [minX, minY] = lngLatToMercator([minLon, maxLat]);
     const [maxX, maxY] = lngLatToMercator([maxLon, minLat]);
+
+    const tileList: Coords[] = [];
 
     for (let zoom = minZoom; zoom <= maxZoom; zoom++) {
         const tileSize = 1 / 2 ** zoom;
@@ -43,94 +61,46 @@ async function run(): Promise<void> {
 
         for (let x = minXCoord; x <= maxXCoord; x++) {
             for (let y = minYCoord; y <= maxYCoord; y++) {
-                await generalizeTile([zoom, x, y]);
+                tileList.push([zoom, x, y]);
             }
         }
     }
-}
 
-async function generalizeTile(coords: Coords): Promise<void> {
-    const startTime = performance.now();
+    const startTime = Date.now();
+    let generatedTileCount = 0;
+    for (const coords of tileList) {
+        workers(coords, outputPath, () => {
+            generatedTileCount++;
 
-    const zoom = coords[0];
-    const x = coords[1];
-    const y = coords[2];
+            const progress = formatPercent((generatedTileCount / tileList.length) * 100);
 
-    process.stdout.write(`Processing ${coords[0]}/${coords[1]}/${coords[2]}... `);
+            console.log(`* [${progress}%] Tile [${coords[0]}, ${coords[1]}, ${coords[2]}] ready.`);
 
-    const tileKey = coordsToKey(coords);
-    const outputPath = path.join(__dirname, '..', 'dist');
+            if (generatedTileCount === tileList.length) {
+                console.log(
+                    `\nTile generation successful. Total time: ${(Date.now() - startTime) /
+                        1000}s.`,
+                );
 
-    const input = await download(coords);
+                farm.end(workers);
 
-    const polygons = input.layers.polygons;
-    const woods: Feature[] = [];
+                const telemetry: Telemetry = {
+                    tileCount: tileList.length,
+                    time: Date.now() - startTime,
+                };
 
-    for (let i = 0; i < polygons.length; i++) {
-        const feature = polygons.feature(i);
+                const tilesetsPath = path.join(distPath, 'tilesets.json');
 
-        if (feature.properties.categ === 'forest') {
-            woods.push(feature);
-        }
-    }
+                const tilesets: Tileset[] = fs.existsSync(tilesetsPath)
+                    ? JSON.parse(fs.readFileSync(tilesetsPath, 'utf8'))
+                    : [];
 
-    const canvasPadding = (padding * rasterSize) / extent;
-    const canvasSize = rasterSize + 2 * canvasPadding;
+                const newTilesets = tilesets.filter(tileset => tileset.id !== id);
 
-    const canvas = createCanvas(canvasSize, canvasSize);
-    const ctx = canvas.getContext('2d');
+                newTilesets.push({ id, settings, telemetry });
 
-    ctx.antialias = 'none';
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvasSize, canvasSize);
-
-    for (const feature of woods) {
-        const geometry = feature.loadGeometry();
-
-        ctx.beginPath();
-
-        for (const ring of geometry) {
-            for (let i = 0; i < ring.length; i++) {
-                const point = ring[i];
-                const x = ((point.x + padding) / extent) * rasterSize;
-                const y = ((point.y + padding) / extent) * rasterSize;
-
-                if (i === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
-                }
+                fs.writeFileSync(tilesetsPath, JSON.stringify(newTilesets, null, 4));
             }
-
-            ctx.closePath();
-        }
-
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
+        });
     }
-
-    const imageData = ctx.getImageData(0, 0, canvasSize, canvasSize);
-
-    convolute(imageData, convolutionRadius);
-
-    ctx.putImageData(imageData, 0, 0);
-
-    const traced = await trace(imageData);
-    const rings = parsePath(traced);
-
-    const simplifiedRings = rings.map(ring => simplifyRing(ring, simplificationTolerance));
-
-    const geojson = createGeoJson(simplifiedRings, coords);
-    const tileIndex = geojsonvt(geojson, {
-        maxZoom: zoom,
-        tolerance: 0,
-    });
-
-    const tile = tileIndex.getTile(zoom, x, y);
-    const buffer = fromGeojsonVt({ polygons: tile });
-    fs.writeFileSync(path.join(outputPath, `${tileKey}.pbf`), buffer);
-
-    const time = performance.now() - startTime;
-
-    console.log(`finished in ${time.toFixed(0)}ms.`);
 }

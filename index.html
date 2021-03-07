@@ -2,178 +2,66 @@
 <html>
     <head>
         <title>Malevich</title>
+
         <meta charset="utf-8" />
-        <style>
-            html,
-            body {
-                padding: 0;
-                margin: 0;
-                font-family: monospace;
-                font-size: 16px;
-                box-sizing: border-box;
-            }
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 
-            .tile-card {
-                width: 300px;
-                border: 1px solid #ccc;
-                padding: 10px;
-                margin: 10px;
-                display: inline-block;
-                cursor: pointer;
-            }
+        <link rel="shortcut icon" href="assets/favicon.png" />
 
-            .tile-key {
-                font-size: 32px;
-                font-weight: bold;
-                margin-bottom: 10px;
-            }
-
-            .tile-table {
-                width: 100%;
-            }
-
-            .table-header {
-                font-weight: bold;
-            }
-
-            .checkbox {
-                margin: 10px;
-            }
-
-            .map {
-                width: calc(100% - 20px);
-                height: 750px;
-                margin: 10px;
-            }
-        </style>
-
-        <script src="https://api.mapbox.com/mapbox-gl-js/v2.1.1/mapbox-gl.js"></script>
-        <link href="https://api.mapbox.com/mapbox-gl-js/v2.1.1/mapbox-gl.css" rel="stylesheet" />
+        <link rel="stylesheet" href="./assets/mapbox-gl.css" />
+        <link rel="stylesheet" href="./assets/style.css" />
     </head>
+
     <body>
-        <div class="map"></div>
+        <div id="map"></div>
+        <div id="panel">
+            <div id="mapstyles">
+                <div class="layers-header">Mapstyles</div>
+                <div id="mapstyle-list"></div>
+                <label class="button add">
+                    <input type="file" id="add-mapstyle-input" />
+                    +
+                </label>
+            </div>
+            <div class="layers-header">Options</div>
 
-        <script>
-            const accessToken =
-                'Fcl36Sb9lU5ynhsN8ofA47SqaVDPAlnG5b669b1f243a48e40fd719fef7b80ecbe75a54da';
-            const mapboxAccessToken =
-                'pk.eyJ1Ijoib3N2b2RlZiIsImEiOiJjazNwbjNlMWUwNGtkM2Vtb253MjM3cXhvIn0.A9Qebgu0gf2BlndYixeeOw';
+            <div class="controls">
+                <div>
+                    <input type="checkbox" id="tile-boundaries" name="tile-boundaries" checked />
+                    <label for="tile-boundaries">Show tile boundaries</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="collision-boxes" name="collision-boxes" />
+                    <label for="collision-boxes">Show collision boxes</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="overdraw-inspector" name="overdraw-inspector" />
+                    <label for="overdraw-inspector">Show overdraw inspector</label>
+                </div>
+            </div>
 
-            run();
+            <div class="layers-header">Woods Layer</div>
+            <div id="woods-list"></div>
 
-            async function run() {
-                mapboxgl.accessToken = mapboxAccessToken;
+            <div class="layers-header">Scale</div>
+            <div class="controls range">
+                <input
+                    class="slider"
+                    id="scale-input"
+                    type="range"
+                    min="1"
+                    max="4"
+                    value="1"
+                    step="any"
+                />
+                <div class="indicator scale">1.00</div>
+            </div>
 
-                const map = new mapboxgl.Map({
-                    container: document.querySelector('.map'),
-                    zoom: 4,
-                    center: [13.1, 48.23],
-                    transformRequest: url => {
-                        return { url: transformResourceUrl(url) };
-                    },
-                });
+            <div id="layers-container"></div>
+        </div>
 
-                const mapstyle = await fetch(
-                    `https://vapi.mc-cdn.io/styles/Base%20Carto.json?access_token=${accessToken}`,
-                ).then(response => response.json());
-
-                const woodsLayer = mapstyle.layers.find(layer => layer.id === 'Landuse-wood');
-
-                woodsLayer.paint['fill-opacity'] = 0;
-
-                map.setStyle(mapstyle);
-                map.showTileBoundaries = true;
-
-                await new Promise(resolve => map.on('style.load', resolve));
-
-                map.addSource('test', {
-                    type: 'vector',
-                    minzoom: 0,
-                    maxzoom: 5,
-                    tiles: ['http://localhost:8080/dist/{z}_{x}_{y}.pbf'],
-                });
-
-                map.addLayer(
-                    {
-                        id: 'test',
-                        type: 'fill',
-                        source: 'test',
-                        'source-layer': 'polygons',
-                        paint: {
-                            'fill-antialias': false,
-                            'fill-color': '#ff0000',
-                        },
-                    },
-                    'Landuse-wood',
-                );
-
-                window.map = map;
-            }
-
-            function getTileCardHtml(key, stats) {
-                const {
-                    inputRingCount,
-                    outputRingCount,
-                    inputVertexCount,
-                    outputVertexCount,
-                    rasterTime,
-                    tracingTime,
-                    convolutionTime,
-                    simplificationTime,
-                } = stats;
-
-                const time = rasterTime + convolutionTime + tracingTime + simplificationTime;
-
-                const ringRatio = (outputRingCount / inputRingCount) * 100;
-                const ringRatioPercent = ringRatio.toFixed(0);
-
-                const vertexRatio = (outputVertexCount / inputVertexCount) * 100;
-                const vertexRatioPercent = vertexRatio.toFixed(0);
-
-                return `
-                    <div class="tile-card" data-key="${key}">
-                        <div class="tile-key">${key}</div>
-
-                        <table class="tile-table">
-                            <tr>
-                                <td class="table-header">Time:</td>
-                                <td>${formatNumber(time)}ms</td>
-                            </tr>
-                            <tr>
-                                <td class="table-header">Rings:</td>
-                                <td>${formatNumber(inputRingCount)} → ${formatNumber(
-                    outputRingCount,
-                )} (${ringRatioPercent}%)</td>
-                            </tr>
-                            <tr>
-                                <td class="table-header">Vertices:</td>
-                                <td>${formatNumber(inputVertexCount)} → ${formatNumber(
-                    outputVertexCount,
-                )} (${vertexRatioPercent}%)</td>
-                            </tr>
-                        </table>
-                    </div>
-                `;
-            }
-
-            function formatNumber(x) {
-                return x.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-            }
-
-            function transformResourceUrl(url) {
-                url = url.replace('maps4news.com', 'mapcreator.io');
-                url = url.replace(/vapi\.(mc-cdn|mapcreator)/, 'vapi.bleeding.$1');
-
-                if (isVapiUrl(url)) {
-                    url = `${url}?access_token=${accessToken}`;
-                }
-
-                return url;
-            }
-
-            function isVapiUrl(url) {
-                return /vapi\..*(mc-cdn|mapcreator)\.io/.test(url);
-            }
-        </script>
+        <script src="https://unpkg.com/stats.js@0.17.0/build/stats.min.js"></script>
+        <script src="./assets/mapbox-gl-dev.js"></script>
+        <script src="./assets/index.js"></script>
     </body>
 </html>

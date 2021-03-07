@@ -5,7 +5,7 @@
     "scripts": {
         "lint": "tslint -p tsconfig.json 'src/**/*.ts'",
         "prettier": "prettier --check \"./src/**/*.ts\"",
-        "generalize": "npm run clean && ts-node --log-error --files src/index.ts",
+        "generalize": "ts-node --log-error --files src/index.ts",
         "clean": "rm -rf dist && mkdir dist"
     },
     "keywords": [],
@@ -33,6 +33,7 @@
         "pbf": "^3.2.1",
         "potrace": "^2.1.8",
         "simplify-js": "^1.2.4",
-        "vt-pbf": "^3.1.1"
+        "vt-pbf": "^3.1.1",
+        "worker-farm": "^1.7.0"
     }
 }

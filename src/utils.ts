@@ -110,3 +110,42 @@ export function toPrecision(point: Point, precision: number): Point {
 export function coordsToKey(coords: Coords): string {
     return `${coords[0]}_${coords[1]}_${coords[2]}`;
 }
+
+export function fnv32b(str: string): string {
+    const FNV1_32A_INIT = 0x811c9dc5;
+
+    let hash = str
+        .split('')
+        .map(x => x.charCodeAt(0))
+        .reduce((sum, val) => {
+            sum ^= val;
+
+            return sum + (sum << 1) + (sum << 4) + (sum << 7) + (sum << 8) + (sum << 24);
+        }, FNV1_32A_INIT);
+
+    // Avalanche
+    hash ^= hash << 3;
+    hash += hash >> 5;
+    hash ^= hash << 4;
+    hash += hash >> 17;
+    hash ^= hash << 25;
+    hash += hash >> 6;
+
+    return `0000000${(hash >>> 0).toString(16)}`.substr(-8);
+}
+
+export function leftPad(string: string, length: number): string {
+    if (string.length >= length) {
+        return string;
+    }
+
+    return '0'.repeat(length - string.length) + string;
+}
+
+export function formatPercent(value: number): string {
+    value = Math.round(value * 10) / 10;
+
+    const string = value.toFixed(1);
+
+    return value < 10 ? ` ${string}` : string;
+}

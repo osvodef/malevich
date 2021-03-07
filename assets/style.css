@@ -1,0 +1,138 @@
+html,
+body {
+    padding: 0;
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Courier New', Courier, monospace;
+    user-select: none;
+}
+
+#map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 400px;
+}
+
+#panel {
+    background-color: white;
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 400px;
+    height: 100%;
+    overflow: auto;
+}
+
+.button {
+    display: block;
+    border: 1px solid black;
+    margin: 10px 10px 0 10px;
+    text-align: center;
+    cursor: pointer;
+}
+
+.button .title {
+    line-height: 40px;
+    font-weight: bold;
+}
+
+.button .description {
+    margin-top: -5px;
+    font-size: 12px;
+}
+
+.button:last-child {
+    margin-bottom: 10px;
+}
+
+.button.active {
+    background-color: black;
+    color: white;
+    cursor: initial;
+    pointer-events: none;
+}
+
+.button.add {
+    font-size: 32px;
+    font-weight: bold;
+}
+
+#add-mapstyle-input {
+    display: none;
+}
+
+.caption {
+    margin: 10px 0 -5px 10px;
+}
+
+.controls {
+    padding: 10px;
+}
+
+.controls.range {
+    display: flex;
+}
+
+.slider {
+    cursor: pointer;
+    flex-grow: 1;
+    margin-right: 10px;
+}
+
+.indicator {
+    width: 45px;
+    text-align: right;
+}
+
+.layers-header {
+    font-size: 20px;
+    font-weight: bold;
+    height: 30px;
+    text-transform: uppercase;
+    padding: 0 10px;
+    border-bottom: 2px solid black;
+    line-height: 30px;
+}
+
+.layer {
+    height: 40px;
+    position: relative;
+    border-bottom: 1px solid black;
+    cursor: pointer;
+}
+
+.layer-bar {
+    background-color: #ff5c5c;
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+}
+
+.layer-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+}
+
+.layer-vtcs {
+    font-weight: bold;
+}
+
+#tile-boundaries,
+#collision-boxes,
+#overdraw-inspector {
+    cursor: pointer;
+    margin: 0;
+    vertical-align: middle;
+}
