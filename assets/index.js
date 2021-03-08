@@ -144,11 +144,13 @@ function switchStyle(index, options) {
 
     if (woodsLayer !== undefined) {
         if (woodsetId !== 'original') {
+            const baseUrl = location.href.replace(location.hash, '');
+
             sources[woodset.id] = {
                 type: 'vector',
                 minzoom: woodset.settings.minZoom,
                 maxzoom: woodset.settings.maxZoom,
-                tiles: [`${window.location.origin}/dist/${woodset.id}/{z}_{x}_{y}.pbf`],
+                tiles: [baseUrl + `dist/${woodset.id}/{z}_{x}_{y}.pbf`],
             };
 
             woodsLayer['source'] = woodset.id;
