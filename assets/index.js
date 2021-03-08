@@ -37,8 +37,8 @@ async function run() {
 
     const map = new mapboxgl.Map({
         container: 'map',
-        zoom: 4,
-        center: [13.1, 48.23],
+        zoom: 7,
+        center: [10, 50],
         hash: true,
         transformRequest: url => {
             return { url: transformResourceUrl(url) };
