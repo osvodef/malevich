@@ -67,19 +67,22 @@ async function run(): Promise<void> {
     }
 
     const startTime = Date.now();
-    let generatedTileCount = 0;
+    let tileCount = 0;
     for (const coords of tileList) {
         workers(coords, outputPath, () => {
-            generatedTileCount++;
+            tileCount++;
 
-            const progress = formatPercent((generatedTileCount / tileList.length) * 100);
+            const progress = formatPercent((tileCount / tileList.length) * 100);
 
             console.log(`* [${progress}%] Tile [${coords[0]}, ${coords[1]}, ${coords[2]}] ready.`);
 
-            if (generatedTileCount === tileList.length) {
+            if (tileCount === tileList.length) {
+                const elapsedTime = Date.now() - startTime;
+                const timePerTile = Math.round(elapsedTime / tileCount);
+
                 console.log(
-                    `\nTile generation successful. Total time: ${(Date.now() - startTime) /
-                        1000}s.`,
+                    `\nTile generation successful. Tiles generated: ${tileCount}. Total time: ${elapsedTime /
+                        1000}s (~${timePerTile}ms per tile).`,
                 );
 
                 farm.end(workers);

@@ -13,6 +13,7 @@ let layersDimmed = false;
 
 const woodsets = [];
 let woodsetId = 'original';
+let woodOutlines = false;
 
 let minVertices = 0;
 let minArea = 0;
@@ -75,6 +76,11 @@ async function run() {
         map.showOverdrawInspector = e.target.checked;
     });
 
+    document.querySelector('#wood-outlines').addEventListener('input', e => {
+        woodOutlines = e.target.checked;
+        switchStyle(styleIndex);
+    });
+
     document.querySelector('#add-mapstyle-input').addEventListener('input', async e => {
         const file = e.target.files[0];
 
@@ -118,9 +124,7 @@ async function loadInitialStyles() {
 async function loadWoodsets() {
     const tilesets = await fetch('./dist/tilesets.json').then(response => response.json());
 
-    for (const tileset of tilesets) {
-        tileset.active = false;
-    }
+    tilesets.reverse();
 
     woodsets.push(...tilesets);
 }
@@ -135,11 +139,11 @@ function switchStyle(index, options) {
     const style = JSON.parse(JSON.stringify(styles[styleIndex].style));
     const { sources, layers } = style;
 
-    if (woodsetId !== 'original') {
-        const woodset = woodsets.find(woodset => woodset.id === woodsetId);
-        const woodsLayer = layers.find(layer => layer.id === 'Landuse-wood');
+    const woodset = woodsets.find(woodset => woodset.id === woodsetId);
+    const woodsLayer = layers.find(layer => layer.id === 'Landuse-wood');
 
-        if (woodsLayer !== undefined) {
+    if (woodsLayer !== undefined) {
+        if (woodsetId !== 'original') {
             sources[woodset.id] = {
                 type: 'vector',
                 minzoom: woodset.settings.minZoom,
@@ -151,6 +155,10 @@ function switchStyle(index, options) {
             woodsLayer['source-layer'] = 'polygons';
 
             delete woodsLayer.filter;
+        }
+
+        if (woodOutlines) {
+            woodsLayer.paint['fill-outline-color'] = '#ff0000';
         }
     }
 
@@ -259,7 +267,7 @@ function rerenderWoods() {
     const allWoodsets = [{ id: 'original' }].concat(woodsets);
     const html = allWoodsets
         .map(woodset => {
-            const { id, settings } = woodset;
+            const { id, settings, telemetry } = woodset;
             const active = id === woodsetId ? 'active' : '';
 
             let text;
@@ -267,8 +275,10 @@ function rerenderWoods() {
             if (id === 'original') {
                 text = `<span class="title">Original</span>`;
             } else {
+                const msPerTile = Math.round(telemetry.time / telemetry.tileCount);
+
                 text = `
-                    <span class="title">${id}</span>
+                    <span class="title">Generalized @ ${settings.convolutionRadius}px</span>
                     <p class="description">
                         Raster size: <b>${settings.rasterSize}px</b>
                         <br>
@@ -277,6 +287,8 @@ function rerenderWoods() {
                         Simplification tolerance: <b>${settings.simplificationTolerance}px</b>
                         <br>
                         Despeckling tolerance: <b>${settings.turdSize}px²</b>
+                        <br>
+                        Time per tile: <b>~${msPerTile}ms</b>
                     </p>
                 `;
             }
@@ -290,7 +302,23 @@ function rerenderWoods() {
     document.querySelectorAll('.button.woods').forEach(element => {
         element.addEventListener('click', () => {
             woodsetId = element.dataset.id;
+
             rerenderWoods();
+
+            if (woodsetId !== 'original') {
+                const woodset = woodsets.find(woodset => woodset.id === woodsetId);
+                const { minZoom, maxZoom } = woodset.settings;
+
+                map.setMinZoom();
+                map.setMaxZoom();
+
+                map.setMinZoom(minZoom);
+                map.setMaxZoom(maxZoom + 1);
+            } else {
+                map.setMinZoom();
+                map.setMaxZoom();
+            }
+
             switchStyle(styleIndex);
         });
     });

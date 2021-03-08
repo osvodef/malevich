@@ -42,6 +42,7 @@ body {
 .button .description {
     margin-top: -5px;
     font-size: 12px;
+    display: none;
 }
 
 .button:last-child {
@@ -53,6 +54,10 @@ body {
     color: white;
     cursor: initial;
     pointer-events: none;
+}
+
+.button.active .description {
+    display: block;
 }
 
 .button.add {
@@ -131,7 +136,8 @@ body {
 
 #tile-boundaries,
 #collision-boxes,
-#overdraw-inspector {
+#overdraw-inspector,
+#wood-outlines {
     cursor: pointer;
     margin: 0;
     vertical-align: middle;

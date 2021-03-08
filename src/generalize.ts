@@ -36,11 +36,13 @@ module.exports = function generalizeTile(
             const polygons = input.layers.polygons;
             const woods: Feature[] = [];
 
-            for (let i = 0; i < polygons.length; i++) {
-                const feature = polygons.feature(i);
+            if (polygons !== undefined) {
+                for (let i = 0; i < polygons.length; i++) {
+                    const feature = polygons.feature(i);
 
-                if (feature.properties.categ === 'forest') {
-                    woods.push(feature);
+                    if (feature.properties.categ === 'forest') {
+                        woods.push(feature);
+                    }
                 }
             }
 
