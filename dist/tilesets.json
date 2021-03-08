@@ -1,0 +1,86 @@
+[
+    {
+        "id": "edb75e37",
+        "settings": {
+            "minZoom": 0,
+            "maxZoom": 8,
+            "bound": {
+                "minX": -10,
+                "maxX": 35,
+                "minY": 35,
+                "maxY": 60
+            },
+            "turdSize": 1,
+            "rasterSize": 1024,
+            "convolutionRadius": 8,
+            "simplificationTolerance": 1
+        },
+        "telemetry": {
+            "tileCount": 1272,
+            "time": 381162
+        }
+    },
+    {
+        "id": "dbd32bf5",
+        "settings": {
+            "minZoom": 0,
+            "maxZoom": 8,
+            "bound": {
+                "minX": -10,
+                "maxX": 35,
+                "minY": 35,
+                "maxY": 60
+            },
+            "turdSize": 1,
+            "rasterSize": 1024,
+            "convolutionRadius": 4,
+            "simplificationTolerance": 1
+        },
+        "telemetry": {
+            "tileCount": 1272,
+            "time": 187444
+        }
+    },
+    {
+        "id": "a3ef3982",
+        "settings": {
+            "minZoom": 0,
+            "maxZoom": 8,
+            "bound": {
+                "minX": -10,
+                "maxX": 35,
+                "minY": 35,
+                "maxY": 60
+            },
+            "turdSize": 1,
+            "rasterSize": 1024,
+            "convolutionRadius": 2,
+            "simplificationTolerance": 1
+        },
+        "telemetry": {
+            "tileCount": 1272,
+            "time": 204600
+        }
+    },
+    {
+        "id": "0f0e03bf",
+        "settings": {
+            "minZoom": 0,
+            "maxZoom": 8,
+            "bound": {
+                "minX": -10,
+                "maxX": 35,
+                "minY": 35,
+                "maxY": 60
+            },
+            "turdSize": 1,
+            "rasterSize": 1024,
+            "convolutionRadius": 1,
+            "simplificationTolerance": 1
+        },
+        "telemetry": {
+            "tileCount": 1272,
+            "time": 385398
+        }
+    }
+]
