@@ -108,7 +108,7 @@ async function loadInitialStyles() {
     const styles = [
         {
             name: 'Base Carto (latest)',
-            url: `https://vapi.mc-cdn.io/styles/Base%20Carto.json?access_token=${accessToken}`,
+            url: `https://vapi.bleeding.mapcreator.io/styles/Base%20Carto.json?access_token=${accessToken}`,
         },
     ];
 
@@ -123,8 +123,6 @@ async function loadInitialStyles() {
 
 async function loadWoodsets() {
     const tilesets = await fetch('./dist/tilesets.json').then(response => response.json());
-
-    tilesets.reverse();
 
     woodsets.push(...tilesets);
 }
