@@ -353,6 +353,9 @@ function formatNumber(x) {
 }
 
 function transformResourceUrl(url) {
+    url = url.replace('maps4news.com', 'mapcreator.io');
+    url = url.replace(/vapi\.(mc-cdn|mapcreator)/, 'vapi.bleeding.$1');
+
     if (isVapiUrl(url)) {
         url = `${url}?access_token=${accessToken}`;
     }
