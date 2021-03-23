@@ -1,6 +1,6 @@
-import { fnv32b, formatPercent, lngLatToMercator } from './utils';
+import { fnv32b, formatPercent } from './utils';
 import { Coords, Settings, Telemetry, Tileset } from './types';
-import farm from 'worker-farm';
+import { generalizeTile } from './generalize';
 import * as path from 'path';
 import * as fs from 'fs';
 import {
@@ -17,7 +17,6 @@ import {
 } from './constants';
 
 const distPath = path.join(__dirname, '..', 'dist');
-const workers = farm(require.resolve('./generalize'));
 
 run();
 
@@ -46,21 +45,13 @@ async function run(): Promise<void> {
     }
     fs.mkdirSync(outputPath);
 
-    const [minX, minY] = lngLatToMercator([minLon, maxLat]);
-    const [maxX, maxY] = lngLatToMercator([maxLon, minLat]);
-
     const tileList: Coords[] = [];
 
     for (let zoom = minZoom; zoom <= maxZoom; zoom++) {
-        const tileSize = 1 / 2 ** zoom;
+        const tileCount = 2 ** zoom;
 
-        const minXCoord = Math.floor(minX / tileSize);
-        const minYCoord = Math.floor(minY / tileSize);
-        const maxXCoord = Math.floor(maxX / tileSize);
-        const maxYCoord = Math.floor(maxY / tileSize);
-
-        for (let x = minXCoord; x <= maxXCoord; x++) {
-            for (let y = minYCoord; y <= maxYCoord; y++) {
+        for (let x = 0; x < tileCount; x++) {
+            for (let y = 0; y < tileCount; y++) {
                 tileList.push([zoom, x, y]);
             }
         }
@@ -68,8 +59,9 @@ async function run(): Promise<void> {
 
     const startTime = Date.now();
     let tileCount = 0;
+
     for (const coords of tileList) {
-        workers(coords, outputPath, () => {
+        generalizeTile(coords, outputPath, () => {
             tileCount++;
 
             const progress = formatPercent((tileCount / tileList.length) * 100);
@@ -84,8 +76,6 @@ async function run(): Promise<void> {
                     `\nTile generation successful. Tiles generated: ${tileCount}. Total time: ${elapsedTime /
                         1000}s (~${timePerTile}ms per tile).`,
                 );
-
-                farm.end(workers);
 
                 const telemetry: Telemetry = {
                     tileCount: tileList.length,

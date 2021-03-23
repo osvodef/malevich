@@ -13,6 +13,7 @@
     "license": "ISC",
     "devDependencies": {
         "@types/geojson": "^7946.0.7",
+        "@types/line-reader": "0.0.33",
         "@types/mkdirp": "^1.0.1",
         "@types/node": "^14.14.31",
         "@types/node-fetch": "^2.5.8",
@@ -27,6 +28,7 @@
         "canvas": "^2.6.1",
         "fetch-retry": "^4.1.0",
         "geojson-vt": "^3.2.1",
+        "line-reader": "^0.4.0",
         "mapbox-vector-tile": "^0.3.0",
         "mkdirp": "^1.0.4",
         "node-fetch": "^2.6.1",
