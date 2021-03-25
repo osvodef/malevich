@@ -111,6 +111,16 @@ export function coordsToKey(coords: Coords): string {
     return `${coords[0]}_${coords[1]}_${coords[2]}`;
 }
 
+export function coordsToBound(coords: Coords): Bound {
+    const [zoom, x, y] = coords;
+    const tileSize = 1 / 2 ** zoom;
+
+    const [minX, minY] = mercatorToLngLat([x * tileSize, (y + 1) * tileSize]);
+    const [maxX, maxY] = mercatorToLngLat([(x + 1) * tileSize, y * tileSize]);
+
+    return { minX, minY, maxX, maxY };
+}
+
 export function fnv32b(str: string): string {
     const FNV1_32A_INIT = 0x811c9dc5;
 

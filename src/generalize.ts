@@ -1,15 +1,16 @@
-import { coordsToKey, formatPercent, lngLatToMercator } from './utils';
+import { coordsToBound, coordsToKey, lngLatToMercator } from './utils';
 import { MultiPolygon, Polygon } from 'geojson';
 import { createGeoJson } from './geojson';
 import { simplifyRing } from './simplify';
 import { convolute } from './convolution';
 import { fromGeojsonVt } from 'vt-pbf';
 import { createCanvas } from 'canvas';
-import lineReader from 'line-reader';
 import { parsePath } from './path';
 import geojsonvt from 'geojson-vt';
-import { Coords } from './types';
+import { Coords, DbRow } from './types';
 import { trace } from './trace';
+import { open } from 'sqlite';
+import sqlite3 from 'sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 import {
@@ -20,14 +21,22 @@ import {
     extent,
 } from './constants';
 
-export function generalizeTile(coords: Coords, outputPath: string, callback: () => void): void {
+const dbPromise = open({
+    filename: path.join(__dirname, '..', '..', '..', 'woods.db'),
+    driver: sqlite3.Database,
+});
+
+module.exports = async function generalizeTile(
+    coords: Coords,
+    outputPath: string,
+    callback: () => void,
+): Promise<void> {
     const zoom = coords[0];
     const x = coords[1];
     const y = coords[2];
 
     const tileKey = coordsToKey(coords);
-
-    const inputPath = path.join(__dirname, '..', '..', '..', 'woods.geojson');
+    const tileSize = 1 / 2 ** zoom;
 
     const canvasPadding = (padding * rasterSize) / extent;
     const canvasSize = rasterSize + 2 * canvasPadding;
@@ -39,17 +48,33 @@ export function generalizeTile(coords: Coords, outputPath: string, callback: () 
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvasSize, canvasSize);
 
-    let count = 0;
-    const total = 5340958;
-    const startTime = Date.now();
+    const db = await dbPromise;
 
-    lineReader.eachLine(inputPath, (line, last) => {
-        const geometry: Polygon | MultiPolygon = JSON.parse(line);
+    const bound = coordsToBound(coords);
 
-        if (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon') {
-            console.log('Bad Geometry', geometry);
-            process.exit();
-        }
+    const times: number[] = [];
+
+    times.push(Date.now());
+
+    const rows: DbRow[] = await db.all(`
+        SELECT
+            geometry FROM woods
+        WHERE
+            minLng < ${bound.maxX} AND
+            maxLng > ${bound.minX} AND
+            minLat < ${bound.maxY} AND
+            maxLat > ${bound.minY};
+    `);
+
+    times.push(Date.now());
+
+    if (rows.length === 0) {
+        callback(times);
+        return;
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+        const geometry: Polygon | MultiPolygon = JSON.parse(rows[i].geometry);
 
         const ringSets =
             geometry.type === 'MultiPolygon' ? geometry.coordinates : [geometry.coordinates];
@@ -59,95 +84,54 @@ export function generalizeTile(coords: Coords, outputPath: string, callback: () 
         for (const ringSet of ringSets) {
             ctx.beginPath();
 
-            let minX = Infinity;
-            let minY = Infinity;
-            let maxX = -Infinity;
-            let maxY = -Infinity;
-
             for (const ring of ringSet) {
-                for (let i = 0; i < ring.length; i++) {
-                    const mercatorPoint = lngLatToMercator(ring[i]);
+                for (let j = 0; j < ring.length; j++) {
+                    const mercatorPoint = lngLatToMercator(ring[j]);
 
-                    const x = mercatorPoint[0] * rasterSize;
-                    const y = mercatorPoint[1] * rasterSize;
+                    const canvasX = ((mercatorPoint[0] - x * tileSize) / tileSize) * canvasSize;
+                    const canvasY = ((mercatorPoint[1] - y * tileSize) / tileSize) * canvasSize;
 
-                    if (x < minX) {
-                        minX = x;
-                    }
-
-                    if (x > maxX) {
-                        maxX = x;
-                    }
-
-                    if (y < minY) {
-                        minY = y;
-                    }
-
-                    if (y > maxY) {
-                        maxY = y;
-                    }
-
-                    if (i === 0) {
-                        ctx.moveTo(x, y);
+                    if (j === 0) {
+                        ctx.moveTo(canvasX, canvasY);
                     } else {
-                        ctx.lineTo(x, y);
+                        ctx.lineTo(canvasX, canvasY);
                     }
                 }
 
                 ctx.closePath();
             }
 
-            if (Math.round(minX) === Math.round(maxX) && Math.round(minY) === Math.round(maxY)) {
-                ctx.fillRect(Math.round(minX), Math.round(minY), 1, 1);
-            } else {
-                ctx.fill();
-            }
+            ctx.fill();
         }
+    }
 
-        count++;
+    times.push(Date.now());
 
-        if (count % 10000 === 0 && count > 0) {
-            const progress = formatPercent((count / total) * 100);
-            const elapsedTime = Date.now() - startTime;
-            const totalTime = (elapsedTime / count) * total;
-            const remainingTime = Math.round((totalTime - elapsedTime) / 1000);
+    const imageData = ctx.getImageData(0, 0, canvasSize, canvasSize);
+    convolute(imageData, convolutionRadius);
+    ctx.putImageData(imageData, 0, 0);
 
-            console.log(
-                `* [${progress}%] Processed ${count} geometries. Estimated time left: ${remainingTime}s`,
-            );
-        }
+    times.push(Date.now());
 
-        if (last) {
-            const imageData = ctx.getImageData(0, 0, canvasSize, canvasSize);
+    const traced = await trace(imageData);
+    times.push(Date.now());
+    const rings = parsePath(traced);
 
-            fs.writeFileSync(path.join(outputPath, `${tileKey}_rasterized.png`), canvas.toBuffer());
+    const simplifiedRings = rings.map(ring => simplifyRing(ring, simplificationTolerance));
 
-            convolute(imageData, convolutionRadius);
+    const geojson = createGeoJson(simplifiedRings, coords);
 
-            ctx.putImageData(imageData, 0, 0);
-
-            fs.writeFileSync(path.join(outputPath, `${tileKey}_convoluted.png`), canvas.toBuffer());
-
-            trace(imageData).then(traced => {
-                const rings = parsePath(traced);
-
-                const simplifiedRings = rings.map(ring =>
-                    simplifyRing(ring, simplificationTolerance),
-                );
-
-                const geojson = createGeoJson(simplifiedRings, coords);
-                const tileIndex = geojsonvt(geojson, {
-                    maxZoom: zoom,
-                    tolerance: 0,
-                });
-
-                const tile = tileIndex.getTile(zoom, x, y);
-                const buffer = fromGeojsonVt({ polygons: tile });
-
-                fs.writeFile(path.join(outputPath, `${tileKey}.pbf`), buffer, callback);
-            });
-
-            return false;
-        }
+    const tileIndex = geojsonvt(geojson, {
+        maxZoom: zoom,
+        tolerance: 0,
     });
-}
+
+    const tile = tileIndex.getTile(zoom, x, y);
+    const buffer = fromGeojsonVt({ polygons: tile });
+
+    times.push(Date.now());
+
+    fs.writeFile(path.join(outputPath, `${tileKey}.pbf`), buffer, () => {
+        callback(times);
+    });
+};

@@ -108,7 +108,7 @@ async function loadInitialStyles() {
     const styles = [
         {
             name: 'Base Carto (latest)',
-            url: `https://vapi.bleeding.mapcreator.io/styles/Base%20Carto.json?access_token=${accessToken}`,
+            url: `https://vapi.mapcreator.io/styles/Base%20Carto.json?access_token=${accessToken}`,
         },
     ];
 
@@ -353,8 +353,8 @@ function formatNumber(x) {
 }
 
 function transformResourceUrl(url) {
-    url = url.replace('maps4news.com', 'mapcreator.io');
-    url = url.replace(/vapi\.(mc-cdn|mapcreator)/, 'vapi.bleeding.$1');
+    // url = url.replace('maps4news.com', 'mapcreator.io');
+    // url = url.replace(/vapi\.(mc-cdn|mapcreator)/, 'vapi.bleeding.$1');
 
     if (isVapiUrl(url)) {
         url = `${url}?access_token=${accessToken}`;

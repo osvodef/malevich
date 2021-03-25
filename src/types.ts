@@ -10,10 +10,8 @@ export interface Bound {
 }
 
 export interface Settings {
-    bound: Bound;
     minZoom: number;
     maxZoom: number;
-
     rasterSize: number;
     convolutionRadius: number;
     turdSize: number;
@@ -29,4 +27,8 @@ export interface Tileset {
     id: string;
     settings: Settings;
     telemetry: Telemetry;
+}
+
+export interface DbRow {
+    geometry: string;
 }
