@@ -29,10 +29,14 @@ export interface Tileset {
     telemetry: Telemetry;
 }
 
-export interface DbRow {
+export interface SomeObject {
     [key: string]: any;
 }
 
-export interface SomeObject {
-    [key: string]: any;
+export type Pointer = [number, number];
+
+export interface GeometriesMetadata {
+    globalBound: Bound;
+    pointers: Pointer[];
+    bounds: Bound[];
 }

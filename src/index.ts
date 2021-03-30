@@ -1,8 +1,7 @@
-import { DbRow, Settings, SomeObject, Telemetry, Tileset } from './types';
+import { Settings, SomeObject, Telemetry, Tileset } from './types';
 import { fnv32b, getTileList } from './utils';
+import { indexify } from './indexify';
 import { Workers } from './workers';
-import { open } from 'sqlite';
-import sqlite3 from 'sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 import {
@@ -14,7 +13,9 @@ import {
     maxZoom,
 } from './constants';
 
+const inputPath = path.join(__dirname, '..', '..', '..', 'woods.geojson');
 const distPath = path.join(__dirname, '..', 'dist');
+const tmpPath = path.join(__dirname, '..', 'tmp');
 const generalizationFarm = new Workers(require.resolve('./generalize'));
 
 run();
@@ -37,25 +38,21 @@ async function run(): Promise<void> {
     }
     fs.mkdirSync(outputPath);
 
-    const db = await open({
-        filename: path.join(__dirname, '..', 'tmp', 'woods.db'),
-        driver: sqlite3.Database,
-    });
+    console.log('Step 1: indexing input data...');
 
-    const metadata = (await db.get('SELECT * FROM metadata')) as DbRow;
+    const metadata = await indexify(inputPath);
 
-    await db.close();
+    const bound = metadata.globalBound;
 
-    const bound = {
-        minX: metadata.minLng,
-        minY: metadata.minLat,
-        maxX: metadata.maxLng,
-        maxY: metadata.maxLat,
-    };
+    process.exit();
+
+    console.log(`\nStep 2: rendering tiles for zooms ${maxZoom} to ${minZoom}...`);
 
     for (let zoom = maxZoom; zoom >= minZoom; zoom--) {
         const tileList = getTileList(bound, zoom);
         const args = tileList.map(coords => ({ coords, id }));
+
+        console.log(`Rendering zoom level ${zoom}...`);
 
         await generalizationFarm.run(args, (stats: SomeObject) => {
             const { arg } = stats;
