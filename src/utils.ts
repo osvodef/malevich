@@ -1,77 +1,4 @@
-import { Feature, MultiPolygon, Polygon } from 'geojson';
 import { Bound, Coords, Point } from './types';
-
-export function mercatorToTileCount(mercator: number, zoom: number) {
-    return mercator * 2 ** zoom;
-}
-
-export function projectPoint(
-    point: Point,
-    bound: Bound,
-    canvasWidth: number,
-    canvasHeight: number,
-): Point {
-    const width = bound.maxX - bound.minX;
-    const height = bound.maxY - bound.minY;
-
-    return [
-        ((point[0] - bound.minX) / width) * canvasWidth,
-        ((point[1] - bound.minY) / height) * canvasHeight,
-    ];
-}
-
-export function unprojectPoint(
-    point: Point,
-    bound: Bound,
-    canvasWidth: number,
-    canvasHeight: number,
-): Point {
-    const width = bound.maxX - bound.minX;
-    const height = bound.maxY - bound.minY;
-
-    return [
-        (point[0] / canvasWidth) * width + bound.minX,
-        (point[1] / canvasHeight) * height + bound.minY,
-    ];
-}
-
-export function getBound(polygons: Array<Feature<Polygon | MultiPolygon>>): Bound {
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-
-    for (const polygon of polygons) {
-        const { geometry } = polygon;
-
-        const ringSets =
-            geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
-
-        for (const ringSet of ringSets) {
-            for (const ring of ringSet) {
-                for (const point of ring) {
-                    if (point[0] < minX) {
-                        minX = point[0];
-                    }
-
-                    if (point[0] > maxX) {
-                        maxX = point[0];
-                    }
-
-                    if (point[1] < minY) {
-                        minY = point[1];
-                    }
-
-                    if (point[1] > maxY) {
-                        maxY = point[1];
-                    }
-                }
-            }
-        }
-    }
-
-    return { minX, maxX, minY, maxY };
-}
 
 export function lngLatToMercator(lngLat: Point): Point {
     const lng = lngLat[0];
@@ -90,21 +17,6 @@ export function mercatorToLngLat(point: Point): Point {
     const y2 = 180 - y * 360;
 
     return [x * 360 - 180, (360 / Math.PI) * Math.atan(Math.exp((y2 * Math.PI) / 180)) - 90];
-}
-
-export function createSvg(path: string, width: number, height: number): string {
-    return `
-        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" version="1.1">
-            <rect width="${width}" height="${height}" fill="black" />
-            <path d="${path}" stroke="none" fill="white" fill-rule="evenodd" />
-        </svg>
-    `;
-}
-
-export function toPrecision(point: Point, precision: number): Point {
-    const factor = 10 ** precision;
-
-    return [Math.round(point[0] * factor) / factor, Math.round(point[1] * factor) / factor];
 }
 
 export function coordsToKey(coords: Coords): string {
@@ -148,14 +60,6 @@ export function fnv32b(str: string): string {
     return `0000000${(hash >>> 0).toString(16)}`.substr(-8);
 }
 
-export function leftPad(string: string, length: number): string {
-    if (string.length >= length) {
-        return string;
-    }
-
-    return '0'.repeat(length - string.length) + string;
-}
-
 export function formatPercent(value: number): string {
     value = Math.round(value * 10) / 10;
 
@@ -164,28 +68,21 @@ export function formatPercent(value: number): string {
     return value < 10 ? ` ${string}` : string;
 }
 
-export function getTileList(bound: Bound, minZoom: number, maxZoom?: number): Coords[] {
+export function getTileList(bound: Bound, zoom: number): Coords[] {
     const [minX, minY] = lngLatToMercator([bound.minX, bound.maxY]);
     const [maxX, maxY] = lngLatToMercator([bound.maxX, bound.minY]);
 
     const tileList: Coords[] = [];
 
-    if (maxZoom === undefined) {
-        maxZoom = minZoom;
-    }
+    const tileSize = 1 / 2 ** zoom;
+    const minXCoord = Math.floor(minX / tileSize);
+    const minYCoord = Math.floor(minY / tileSize);
+    const maxXCoord = Math.floor(maxX / tileSize);
+    const maxYCoord = Math.floor(maxY / tileSize);
 
-    for (let zoom = maxZoom; zoom >= minZoom; zoom--) {
-        const tileSize = 1 / 2 ** zoom;
-
-        const minXCoord = Math.floor(minX / tileSize);
-        const minYCoord = Math.floor(minY / tileSize);
-        const maxXCoord = Math.floor(maxX / tileSize);
-        const maxYCoord = Math.floor(maxY / tileSize);
-
-        for (let x = minXCoord; x <= maxXCoord; x++) {
-            for (let y = minYCoord; y <= maxYCoord; y++) {
-                tileList.push([zoom, x, y]);
-            }
+    for (let x = minXCoord; x <= maxXCoord; x++) {
+        for (let y = minYCoord; y <= maxYCoord; y++) {
+            tileList.push([zoom, x, y]);
         }
     }
 

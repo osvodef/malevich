@@ -7,7 +7,7 @@
         "prettier": "prettier --check \"./src/**/*.ts\"",
         "generalize": "ts-node --log-error --files src/index.ts",
         "sqlite": "ts-node --log-error --files src/sqlite.ts",
-        "clean": "rm -rf dist && mkdir dist && rm -rf tmp && mkdir tmp && mkdir tmp/rasters",
+        "clean": "rm -rf dist && mkdir dist",
         "downscale": "ts-node --log-error --files src/downscale.ts"
     },
     "keywords": [],

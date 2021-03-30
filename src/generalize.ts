@@ -1,27 +1,27 @@
+import { createCanvas, createImageData, CanvasRenderingContext2D } from 'canvas';
 import { coordsToInteger, coordsToKey, lngLatToMercator } from './utils';
+import { deflate, fromRgba, inflate, squash, toRgba } from './rasters';
+import { Coords, DbRow, SomeObject } from './types';
 import { MultiPolygon, Polygon } from 'geojson';
 import { createGeoJson } from './geojson';
 import { simplifyRing } from './simplify';
 import { convolute } from './convolution';
-import { Coords, DbRow, SomeObject } from './types';
 import { fromGeojsonVt } from 'vt-pbf';
-import { createCanvas, CanvasRenderingContext2D, createImageData } from 'canvas';
+import { promises as fs } from 'fs';
 import { parsePath } from './path';
 import geojsonvt from 'geojson-vt';
 import { trace } from './trace';
 import { open } from 'sqlite';
 import sqlite3 from 'sqlite3';
 import * as path from 'path';
-import { promises as fs } from 'fs';
 import {
     simplificationTolerance,
     convolutionRadius,
+    canvasPadding,
     rasterSize,
-    padding,
-    extent,
+    canvasSize,
     maxZoom,
 } from './constants';
-import { deflate, fromRgba, inflate, squash, toRgba } from './raster';
 
 const tmpPath = path.join(__dirname, '..', 'tmp');
 const distPath = path.join(__dirname, '..', 'dist');
@@ -43,16 +43,14 @@ module.exports = async function generalizeTile(
 
     const tileKey = coordsToKey(coords);
 
-    const canvasPadding = (padding * rasterSize) / extent;
-    const canvasSize = rasterSize + 2 * canvasPadding;
-
     const canvas = createCanvas(canvasSize, canvasSize);
     const ctx = canvas.getContext('2d');
 
-    if (zoom === maxZoom) {
-        await drawInitial(ctx, coords);
-    } else {
-        await drawDownscaled(ctx, coords);
+    const hasContent =
+        zoom === maxZoom ? await drawInitial(ctx, coords) : await drawDownscaled(ctx, coords);
+
+    if (!hasContent) {
+        return callback();
     }
 
     const imageData = ctx.getImageData(0, 0, canvasSize, canvasSize);
@@ -61,6 +59,8 @@ module.exports = async function generalizeTile(
         path.join(tmpPath, 'rasters', `${tileKey}.bin`),
         await deflate(fromRgba(imageData.data)),
     );
+
+    await fs.writeFile(path.join(tmpPath, 'rasters', `${tileKey}.png`), canvas.toBuffer());
 
     convolute(imageData, convolutionRadius);
     ctx.putImageData(imageData, 0, 0);
@@ -85,7 +85,7 @@ module.exports = async function generalizeTile(
     callback();
 };
 
-async function drawInitial(ctx: CanvasRenderingContext2D, coords: Coords): Promise<void> {
+async function drawInitial(ctx: CanvasRenderingContext2D, coords: Coords): Promise<boolean> {
     const zoom = coords[0];
     const x = coords[1];
     const y = coords[2];
@@ -95,13 +95,17 @@ async function drawInitial(ctx: CanvasRenderingContext2D, coords: Coords): Promi
 
     ctx.antialias = 'none';
     ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, rasterSize, rasterSize);
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
 
     const db = await dbPromise;
 
     const rows: DbRow[] = await db.all(`
         SELECT geometry FROM woods INNER JOIN woods2tiles ON woods.id = woods2tiles.woodId WHERE woods2tiles.tileId = ${integer};
     `);
+
+    if (rows.length === 0) {
+        return false;
+    }
 
     for (let i = 0; i < rows.length; i++) {
         const geometry: Polygon | MultiPolygon = JSON.parse(rows[i].geometry);
@@ -122,9 +126,9 @@ async function drawInitial(ctx: CanvasRenderingContext2D, coords: Coords): Promi
                     const canvasY = ((mercatorPoint[1] - y * tileSize) / tileSize) * rasterSize;
 
                     if (j === 0) {
-                        ctx.moveTo(canvasX, canvasY);
+                        ctx.moveTo(canvasX + canvasPadding, canvasY + canvasPadding);
                     } else {
-                        ctx.lineTo(canvasX, canvasY);
+                        ctx.lineTo(canvasX + canvasPadding, canvasY + canvasPadding);
                     }
                 }
 
@@ -134,9 +138,11 @@ async function drawInitial(ctx: CanvasRenderingContext2D, coords: Coords): Promi
             ctx.fill();
         }
     }
+
+    return true;
 }
 
-async function drawDownscaled(ctx: CanvasRenderingContext2D, coords: Coords): Promise<void> {
+async function drawDownscaled(ctx: CanvasRenderingContext2D, coords: Coords): Promise<boolean> {
     const [zoom, x, y] = coords;
 
     const leftTop = await loadRaster([zoom + 1, x * 2, y * 2]);
@@ -150,7 +156,7 @@ async function drawDownscaled(ctx: CanvasRenderingContext2D, coords: Coords): Pr
         leftBottom === undefined &&
         rightBottom === undefined
     ) {
-        return;
+        return false;
     }
 
     const pixels = squash(leftTop, rightTop, leftBottom, rightBottom);
@@ -160,7 +166,9 @@ async function drawDownscaled(ctx: CanvasRenderingContext2D, coords: Coords): Pr
         await deflate(pixels),
     );
 
-    ctx.putImageData(createImageData(toRgba(pixels), rasterSize, rasterSize), 0, 0);
+    ctx.putImageData(createImageData(toRgba(pixels), canvasSize, canvasSize), 0, 0);
+
+    return true;
 }
 
 async function loadRaster(coords: Coords): Promise<Uint8ClampedArray | undefined> {
