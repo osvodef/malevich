@@ -121,6 +121,10 @@ export function coordsToBound(coords: Coords): Bound {
     return { minX, minY, maxX, maxY };
 }
 
+export function coordsToInteger(coords: Coords): number {
+    return coords[0] * 2 ** 32 + coords[1] * 2 ** 16 + coords[2];
+}
+
 export function fnv32b(str: string): string {
     const FNV1_32A_INIT = 0x811c9dc5;
 
@@ -158,4 +162,32 @@ export function formatPercent(value: number): string {
     const string = value.toFixed(1);
 
     return value < 10 ? ` ${string}` : string;
+}
+
+export function getTileList(bound: Bound, minZoom: number, maxZoom?: number): Coords[] {
+    const [minX, minY] = lngLatToMercator([bound.minX, bound.maxY]);
+    const [maxX, maxY] = lngLatToMercator([bound.maxX, bound.minY]);
+
+    const tileList: Coords[] = [];
+
+    if (maxZoom === undefined) {
+        maxZoom = minZoom;
+    }
+
+    for (let zoom = maxZoom; zoom >= minZoom; zoom--) {
+        const tileSize = 1 / 2 ** zoom;
+
+        const minXCoord = Math.floor(minX / tileSize);
+        const minYCoord = Math.floor(minY / tileSize);
+        const maxXCoord = Math.floor(maxX / tileSize);
+        const maxYCoord = Math.floor(maxY / tileSize);
+
+        for (let x = minXCoord; x <= maxXCoord; x++) {
+            for (let y = minYCoord; y <= maxYCoord; y++) {
+                tileList.push([zoom, x, y]);
+            }
+        }
+    }
+
+    return tileList;
 }

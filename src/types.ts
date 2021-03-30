@@ -30,5 +30,9 @@ export interface Tileset {
 }
 
 export interface DbRow {
-    geometry: string;
+    [key: string]: any;
+}
+
+export interface SomeObject {
+    [key: string]: any;
 }

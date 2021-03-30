@@ -6,5 +6,5 @@ export const convolutionRadius = 4;
 export const turdSize = 1;
 export const simplificationTolerance = 1;
 
-export const minZoom = 8;
+export const minZoom = 0;
 export const maxZoom = 8;
