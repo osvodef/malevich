@@ -33,10 +33,6 @@ export function coordsToBound(coords: Coords): Bound {
     return { minX, minY, maxX, maxY };
 }
 
-export function coordsToInteger(coords: Coords): number {
-    return coords[0] * 2 ** 32 + coords[1] * 2 ** 16 + coords[2];
-}
-
 export function fnv32b(str: string): string {
     const FNV1_32A_INIT = 0x811c9dc5;
 
@@ -60,9 +56,8 @@ export function fnv32b(str: string): string {
     return `0000000${(hash >>> 0).toString(16)}`.substr(-8);
 }
 
-export function formatPercent(value: number): string {
-    value = Math.round(value * 10) / 10;
-
+export function formatPercent(count: number, total: number): string {
+    const value = (count / total) * 100;
     const string = value.toFixed(1);
 
     return value < 10 ? ` ${string}` : string;
@@ -87,4 +82,16 @@ export function getTileList(bound: Bound, zoom: number): Coords[] {
     }
 
     return tileList;
+}
+
+export function getElapsed(startTime: number): number {
+    return toSeconds(Date.now() - startTime);
+}
+
+export function toSeconds(ms: number): number {
+    return Math.round(ms / 1000);
+}
+
+export function rightPad(string: string, length: number): string {
+    return string + ' '.repeat(Math.max(0, length - string.length));
 }

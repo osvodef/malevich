@@ -1,8 +1,8 @@
 import { createCanvas, createImageData, CanvasRenderingContext2D } from 'canvas';
-import { coordsToInteger, coordsToKey, lngLatToMercator } from './utils';
+import { coordsToBound, coordsToKey, lngLatToMercator } from './utils';
 import { deflate, fromRgba, inflate, squash, toRgba } from './rasters';
-import { Coords, DbRow, SomeObject } from './types';
 import { MultiPolygon, Polygon } from 'geojson';
+import { Coords, SomeObject } from './types';
 import { createGeoJson } from './geojson';
 import { simplifyRing } from './simplify';
 import { convolute } from './convolution';
@@ -10,9 +10,9 @@ import { fromGeojsonVt } from 'vt-pbf';
 import { promises as fs } from 'fs';
 import { parsePath } from './path';
 import geojsonvt from 'geojson-vt';
+import { readFileSync } from 'fs';
 import { trace } from './trace';
-import { open } from 'sqlite';
-import sqlite3 from 'sqlite3';
+import Flatbush from 'flatbush';
 import * as path from 'path';
 import {
     simplificationTolerance,
@@ -26,10 +26,14 @@ import {
 const tmpPath = path.join(__dirname, '..', 'tmp');
 const distPath = path.join(__dirname, '..', 'dist');
 
-const dbPromise = open({
-    filename: path.join(tmpPath, 'woods.db'),
-    driver: sqlite3.Database,
-});
+const tree = Flatbush.from(readFileSync(path.join(tmpPath, 'tree.bin')).buffer);
+const pointers = new Float64Array(readFileSync(path.join(tmpPath, 'pointers.bin')).buffer);
+const dataPromise = fs.open(path.join(tmpPath, 'geometries.bin'), 'r');
+
+interface Pointer {
+    offset: number;
+    length: number;
+}
 
 module.exports = async function generalizeTile(
     args: SomeObject,
@@ -56,11 +60,11 @@ module.exports = async function generalizeTile(
     const imageData = ctx.getImageData(0, 0, canvasSize, canvasSize);
 
     await fs.writeFile(
-        path.join(tmpPath, 'rasters', `${tileKey}.bin`),
+        path.join(tmpPath, `${tileKey}.bin`),
         await deflate(fromRgba(imageData.data)),
     );
 
-    await fs.writeFile(path.join(tmpPath, 'rasters', `${tileKey}.png`), canvas.toBuffer());
+    await fs.writeFile(path.join(tmpPath, `${tileKey}.png`), canvas.toBuffer());
 
     convolute(imageData, convolutionRadius);
     ctx.putImageData(imageData, 0, 0);
@@ -89,7 +93,6 @@ async function drawInitial(ctx: CanvasRenderingContext2D, coords: Coords): Promi
     const zoom = coords[0];
     const x = coords[1];
     const y = coords[2];
-    const integer = coordsToInteger(coords);
 
     const tileSize = 1 / 2 ** zoom;
 
@@ -97,18 +100,23 @@ async function drawInitial(ctx: CanvasRenderingContext2D, coords: Coords): Promi
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvasSize, canvasSize);
 
-    const db = await dbPromise;
+    const { minX, minY, maxX, maxY } = coordsToBound(coords);
 
-    const rows: DbRow[] = await db.all(`
-        SELECT geometry FROM woods INNER JOIN woods2tiles ON woods.id = woods2tiles.woodId WHERE woods2tiles.tileId = ${integer};
-    `);
+    const indices = tree.search(minX, minY, maxX, maxY);
 
-    if (rows.length === 0) {
+    if (indices.length === 0) {
         return false;
     }
 
-    for (let i = 0; i < rows.length; i++) {
-        const geometry: Polygon | MultiPolygon = JSON.parse(rows[i].geometry);
+    const data = await dataPromise;
+
+    const promises = indices.map(async index => {
+        const { offset, length } = getPointer(index);
+        const buffer = Buffer.alloc(length);
+
+        await data.read(buffer, 0, length, offset);
+
+        const geometry: Polygon | MultiPolygon = JSON.parse(buffer.toString());
 
         const ringSets =
             geometry.type === 'MultiPolygon' ? geometry.coordinates : [geometry.coordinates];
@@ -137,7 +145,9 @@ async function drawInitial(ctx: CanvasRenderingContext2D, coords: Coords): Promi
 
             ctx.fill();
         }
-    }
+    });
+
+    await Promise.all(promises);
 
     return true;
 }
@@ -161,10 +171,7 @@ async function drawDownscaled(ctx: CanvasRenderingContext2D, coords: Coords): Pr
 
     const pixels = squash(leftTop, rightTop, leftBottom, rightBottom);
 
-    await fs.writeFile(
-        path.join(tmpPath, 'rasters', `${coordsToKey(coords)}.bin`),
-        await deflate(pixels),
-    );
+    await fs.writeFile(path.join(tmpPath, `${coordsToKey(coords)}.bin`), await deflate(pixels));
 
     ctx.putImageData(createImageData(toRgba(pixels), canvasSize, canvasSize), 0, 0);
 
@@ -173,9 +180,7 @@ async function drawDownscaled(ctx: CanvasRenderingContext2D, coords: Coords): Pr
 
 async function loadRaster(coords: Coords): Promise<Uint8ClampedArray | undefined> {
     try {
-        const buffer = await fs.readFile(
-            path.join(tmpPath, 'rasters', `${coordsToKey(coords)}.bin`),
-        );
+        const buffer = await fs.readFile(path.join(tmpPath, `${coordsToKey(coords)}.bin`));
 
         const array = new Uint8ClampedArray(await inflate(buffer));
 
@@ -183,4 +188,11 @@ async function loadRaster(coords: Coords): Promise<Uint8ClampedArray | undefined
     } catch (e) {
         return undefined;
     }
+}
+
+function getPointer(index: number): Pointer {
+    return {
+        offset: pointers[index * 2],
+        length: pointers[index * 2 + 1],
+    };
 }

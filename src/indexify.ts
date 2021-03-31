@@ -1,69 +1,100 @@
 import { MultiPolygon, Polygon } from 'geojson';
-import { GeometriesMetadata } from './types';
 import { createInterface } from 'readline';
 import { createReadStream } from 'fs';
 import { promises as fs } from 'fs';
+import Flatbush from 'flatbush';
 import { Bound } from './bound';
-import { once } from 'events';
 import * as path from 'path';
-
-type Pointer = [number, number];
+import { rightPad } from './utils';
+import { createWriteStream } from 'fs';
 
 const tmpPath = path.join(__dirname, '..', 'tmp');
 
-export async function indexify(inputPath: string): Promise<GeometriesMetadata> {
-    const dataFile = await fs.open(path.join(tmpPath, 'geometries.bin'), 'w');
+export async function indexify(inputPath: string): Promise<void> {
+    const dataFile = createWriteStream(path.join(tmpPath, 'geometries.bin'));
 
     const globalBound = new Bound();
 
     const bounds: Bound[] = [];
-    const pointers: Pointer[] = [];
+    const pointers: number[] = [];
 
     let index = 0;
     let position = 0;
+    let total = 0;
 
     const liner = createInterface({
         input: createReadStream(inputPath),
         crlfDelay: Infinity,
     });
 
-    liner.on('line', async (line: string) => {
-        const geometry: Polygon | MultiPolygon = JSON.parse(line);
-        const ringSets =
-            geometry.type === 'MultiPolygon' ? geometry.coordinates : [geometry.coordinates];
+    await new Promise<void>(resolve => {
+        liner.on('line', async (line: string) => {
+            total++;
 
-        const bound = new Bound();
+            const geometry: Polygon | MultiPolygon = JSON.parse(line);
+            const ringSets =
+                geometry.type === 'MultiPolygon' ? geometry.coordinates : [geometry.coordinates];
 
-        for (const ringSet of ringSets) {
-            for (const ring of ringSet) {
-                for (const point of ring) {
-                    bound.extend(point);
-                    globalBound.extend(point);
+            const bound = new Bound();
+
+            for (const ringSet of ringSets) {
+                for (const ring of ringSet) {
+                    for (const point of ring) {
+                        bound.extend(point);
+                        globalBound.extend(point);
+                    }
                 }
             }
-        }
 
-        const { bytesWritten } = await dataFile.write(Buffer.from(line));
+            const buffer = Buffer.from(line);
 
-        bounds.push(bound);
-        pointers.push([position, bytesWritten]);
+            dataFile.write(buffer);
 
-        index++;
-        position += bytesWritten;
+            bounds.push(bound);
+            pointers.push(position, buffer.byteLength);
 
-        if (index % 100 === 0) {
-            const spinner = String.fromCharCode(0x2800 + Math.floor(Math.random() * 256));
+            if (index % 1000 === 0 && index > 0) {
+                printProgress(index, false);
+            }
 
-            process.stdout.write(`\r${spinner} Processed ${index} geometries.`);
-        }
+            index++;
+            position += buffer.byteLength;
+        });
+
+        liner.on('close', () => {
+            dataFile.end();
+        });
+
+        dataFile.on('finish', () => {
+            resolve();
+        });
     });
 
-    await once(liner, 'close');
+    printProgress(total, true);
+
     await dataFile.close();
 
-    return {
-        globalBound,
-        bounds,
-        pointers,
-    };
+    const tree = new Flatbush(total);
+
+    for (const bound of bounds) {
+        tree.add(bound.minX, bound.minY, bound.maxX, bound.maxY);
+    }
+
+    tree.finish();
+
+    const pointersArray = new Float64Array(pointers);
+
+    await fs.writeFile(path.join(tmpPath, 'pointers.bin'), Buffer.from(pointersArray.buffer));
+    await fs.writeFile(path.join(tmpPath, 'tree.bin'), Buffer.from(tree.data));
+    await fs.writeFile(path.join(tmpPath, 'bound.json'), JSON.stringify(globalBound));
+}
+
+function printProgress(index: number, finished: boolean): void {
+    const spinner = !finished
+        ? String.fromCharCode(0x2801 + Math.floor(Math.random() * 254))
+        : String.fromCharCode(0x28ff);
+
+    const message = `  ${spinner} Indexed ${index} geometries.`;
+
+    process.stdout.write(`\r${rightPad(message, process.stdout.columns)}`);
 }

@@ -18,25 +18,11 @@ export interface Settings {
     simplificationTolerance: number;
 }
 
-export interface Telemetry {
-    tileCount: number;
-    time: number;
-}
-
 export interface Tileset {
     id: string;
     settings: Settings;
-    telemetry: Telemetry;
 }
 
 export interface SomeObject {
     [key: string]: any;
-}
-
-export type Pointer = [number, number];
-
-export interface GeometriesMetadata {
-    globalBound: Bound;
-    pointers: Pointer[];
-    bounds: Bound[];
 }

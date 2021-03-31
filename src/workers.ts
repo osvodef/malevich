@@ -8,28 +8,19 @@ export class Workers {
         this.farm = farm(name);
     }
 
-    public run(args: SomeObject[], callback: (stats: SomeObject) => void): Promise<SomeObject> {
+    public run(args: SomeObject[], callback: (count: number) => void): Promise<void> {
         let count = 0;
         let total = args.length;
-
-        const startTime = Date.now();
 
         return new Promise(resolve => {
             for (const arg of args) {
                 this.farm(arg, () => {
                     count++;
 
-                    const elapsedTime = Date.now() - startTime;
-                    const totalTime = (elapsedTime / count) * total;
-                    const remainingTime = Math.round(totalTime - elapsedTime);
-
-                    callback({ arg, count, total, elapsedTime, remainingTime });
+                    callback(count);
 
                     if (count === total) {
-                        const elapsedTime = Date.now() - startTime;
-                        const timePerTask = elapsedTime / total;
-
-                        resolve({ total, elapsedTime, timePerTask });
+                        resolve();
                     }
                 });
             }

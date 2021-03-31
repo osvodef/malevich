@@ -10,4 +10,4 @@ export const turdSize = 1;
 export const simplificationTolerance = 1;
 
 export const minZoom = 0;
-export const maxZoom = 8;
+export const maxZoom = 10;
