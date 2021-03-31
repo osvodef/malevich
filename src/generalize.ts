@@ -21,6 +21,7 @@ import {
     rasterSize,
     canvasSize,
     maxZoom,
+    savePng,
 } from './constants';
 
 const tmpPath = path.join(__dirname, '..', 'tmp');
@@ -64,7 +65,9 @@ module.exports = async function generalizeTile(
         await deflate(fromRgba(imageData.data)),
     );
 
-    await fs.writeFile(path.join(tmpPath, `${tileKey}.png`), canvas.toBuffer());
+    if (savePng) {
+        await fs.writeFile(path.join(tmpPath, `${tileKey}.png`), canvas.toBuffer());
+    }
 
     convolute(imageData, convolutionRadius);
     ctx.putImageData(imageData, 0, 0);
