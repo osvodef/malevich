@@ -84,6 +84,22 @@ export function getTileList(bound: Bound, zoom: number): Coords[] {
     return tileList;
 }
 
+export function getChildren(coords: Coords): Coords[] {
+    const zoom = coords[0] + 1;
+    const baseX = coords[1] * 2;
+    const baseY = coords[2] * 2;
+
+    const result: Coords[] = [];
+
+    for (let y = baseY - 1; y <= baseY + 2; y++) {
+        for (let x = baseX - 1; x <= baseX + 2; x++) {
+            result.push([zoom, x, y]);
+        }
+    }
+
+    return result;
+}
+
 export function getElapsed(startTime: number): number {
     return toSeconds(Date.now() - startTime);
 }

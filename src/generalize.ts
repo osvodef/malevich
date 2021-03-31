@@ -1,11 +1,11 @@
+import { coordsToBound, coordsToKey, getChildren, lngLatToMercator } from './utils';
 import { createCanvas, createImageData, CanvasRenderingContext2D } from 'canvas';
-import { coordsToBound, coordsToKey, lngLatToMercator } from './utils';
 import { deflate, fromRgba, inflate, squash, toRgba } from './rasters';
 import { MultiPolygon, Polygon } from 'geojson';
 import { Coords, SomeObject } from './types';
 import { createGeoJson } from './geojson';
 import { simplifyRing } from './simplify';
-import { convolute } from './convolution';
+import { convolute } from './convolute';
 import { fromGeojsonVt } from 'vt-pbf';
 import { promises as fs } from 'fs';
 import { parsePath } from './path';
@@ -156,23 +156,14 @@ async function drawInitial(ctx: CanvasRenderingContext2D, coords: Coords): Promi
 }
 
 async function drawDownscaled(ctx: CanvasRenderingContext2D, coords: Coords): Promise<boolean> {
-    const [zoom, x, y] = coords;
+    const rasterPromises = getChildren(coords).map(child => loadRaster(child));
+    const rasters = await Promise.all(rasterPromises);
 
-    const leftTop = await loadRaster([zoom + 1, x * 2, y * 2]);
-    const rightTop = await loadRaster([zoom + 1, x * 2 + 1, y * 2]);
-    const leftBottom = await loadRaster([zoom + 1, x * 2, y * 2 + 1]);
-    const rightBottom = await loadRaster([zoom + 1, x * 2 + 1, y * 2 + 1]);
-
-    if (
-        leftTop === undefined &&
-        rightTop === undefined &&
-        leftBottom === undefined &&
-        rightBottom === undefined
-    ) {
+    if (rasters.every(raster => raster === undefined)) {
         return false;
     }
 
-    const pixels = squash(leftTop, rightTop, leftBottom, rightBottom);
+    const pixels = squash(rasters);
 
     await fs.writeFile(path.join(tmpPath, `${coordsToKey(coords)}.bin`), await deflate(pixels));
 
