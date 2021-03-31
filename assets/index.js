@@ -277,8 +277,6 @@ function rerenderWoods() {
             if (id === 'original') {
                 text = `<span class="title">Original</span>`;
             } else {
-                const msPerTile = Math.round(telemetry.time / telemetry.tileCount);
-
                 text = `
                     <span class="title">Generalized @ ${settings.convolutionRadius}px</span>
                     <p class="description">
@@ -289,8 +287,6 @@ function rerenderWoods() {
                         Simplification tolerance: <b>${settings.simplificationTolerance}px</b>
                         <br>
                         Despeckling tolerance: <b>${settings.turdSize}px²</b>
-                        <br>
-                        Time per tile: <b>~${msPerTile}ms</b>
                     </p>
                 `;
             }
