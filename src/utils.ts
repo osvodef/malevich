@@ -1,3 +1,4 @@
+import { extent, padding } from './constants';
 import { Bound, Coords, Point } from './types';
 
 export function lngLatToMercator(lngLat: Point): Point {
@@ -26,9 +27,16 @@ export function coordsToKey(coords: Coords): string {
 export function coordsToBound(coords: Coords): Bound {
     const [zoom, x, y] = coords;
     const tileSize = 1 / 2 ** zoom;
+    const paddingSize = (tileSize * padding) / extent;
 
-    const [minX, minY] = mercatorToLngLat([x * tileSize, (y + 1) * tileSize]);
-    const [maxX, maxY] = mercatorToLngLat([(x + 1) * tileSize, y * tileSize]);
+    const [minX, minY] = mercatorToLngLat([
+        x * tileSize - paddingSize,
+        (y + 1) * tileSize + paddingSize,
+    ]);
+    const [maxX, maxY] = mercatorToLngLat([
+        (x + 1) * tileSize + paddingSize,
+        y * tileSize - paddingSize,
+    ]);
 
     return { minX, minY, maxX, maxY };
 }

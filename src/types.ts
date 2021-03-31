@@ -16,6 +16,7 @@ export interface Settings {
     convolutionRadius: number;
     turdSize: number;
     simplificationTolerance: number;
+    threshold: number;
 }
 
 export interface Tileset {

@@ -287,6 +287,8 @@ function rerenderWoods() {
                         Simplification tolerance: <b>${settings.simplificationTolerance}px</b>
                         <br>
                         Despeckling tolerance: <b>${settings.turdSize}px²</b>
+                        <br>
+                        Threshold: <b>${settings.threshold * 100}%</b>
                     </p>
                 `;
             }

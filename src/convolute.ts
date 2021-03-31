@@ -1,9 +1,20 @@
+import { threshold } from './constants';
+
 export function convolute(imageData: ImageData, radius: number): void {
     const width = imageData.width;
     const height = imageData.height;
     const pixels = imageData.data;
 
-    const threshold = (2 * radius + 1) ** 2 * 127;
+    const pixelThreshold = threshold * 255;
+    const convoThreshold = (2 * radius + 1) ** 2 * 127;
+
+    for (let i = 0; i < pixels.length; i += 4) {
+        const value = pixels[i] > pixelThreshold ? 255 : 0;
+
+        pixels[i + 0] = value;
+        pixels[i + 1] = value;
+        pixels[i + 2] = value;
+    }
 
     const result = new Uint8Array(width * height);
 
@@ -22,7 +33,7 @@ export function convolute(imageData: ImageData, radius: number): void {
                 }
             }
 
-            result[j * width + i] = sum > threshold ? 255 : 0;
+            result[j * width + i] = sum > convoThreshold ? 255 : 0;
         }
     }
 

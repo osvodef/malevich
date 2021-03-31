@@ -85,6 +85,11 @@ module.exports = async function generalizeTile(
     });
 
     const tile = tileIndex.getTile(zoom, x, y);
+
+    if (!tile) {
+        return callback();
+    }
+
     const buffer = fromGeojsonVt({ polygons: tile });
 
     await fs.writeFile(path.join(distPath, id, `${tileKey}.pbf`), buffer);
