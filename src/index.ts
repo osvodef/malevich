@@ -13,7 +13,7 @@ import {
     maxZoom,
 } from './constants';
 
-const inputPath = path.join(__dirname, '..', '..', '..', 'woods.geojson');
+const inputPath = path.join(__dirname, '..', '..', '..', 'woods100000.geojson');
 const distPath = path.join(__dirname, '..', 'dist');
 const tmpPath = path.join(__dirname, '..', 'tmp');
 
@@ -40,9 +40,9 @@ async function run(): Promise<void> {
     console.log('Step 1 of 2: indexing input data...');
     const startTime = Date.now();
 
-    // await indexify(inputPath);
+    await indexify(inputPath);
 
-    console.log(`\n  ⣿ Done in ${getElapsed(startTime)}s.`);
+    console.log(`\n⣿ Done in ${getElapsed(startTime)}s.`);
 
     const bound = JSON.parse(fs.readFileSync(path.join(tmpPath, 'bound.json'), 'utf8'));
     const farm = new Workers(require.resolve('./generalize'));
@@ -54,7 +54,7 @@ async function run(): Promise<void> {
         const total = tileList.length;
         const args = tileList.map(coords => ({ coords, id }));
 
-        console.log(`* Starting zoom level ${zoom}.`);
+        console.log(`* Starting zoom level ${zoom}:`);
         const startTime = Date.now();
 
         await farm.run(args, count => {
@@ -70,13 +70,13 @@ async function run(): Promise<void> {
             const percent = formatPercent(count, total);
             const eta = toSeconds(remainingTime);
 
-            const message = `  ${spinner} [${percent}%] Rendered ${count} of ${total}. ETA: ~${eta}s.`;
+            const message = `${spinner} [${percent}%] Rendered ${count} of ${total}. ETA: ~${eta}s.`;
 
             process.stdout.write(`\r${rightPad(message, process.stdout.columns)}`);
         });
 
         const timePerTile = Math.round((Date.now() - startTime) / total);
-        console.log(`\n  ⣿ Done in ${getElapsed(startTime)}s (~${timePerTile}ms per tile).`);
+        console.log(`\n⣿ Done in ${getElapsed(startTime)}s (~${timePerTile}ms per tile).`);
     }
 
     farm.end();
