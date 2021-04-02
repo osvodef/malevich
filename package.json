@@ -9,7 +9,8 @@
         "clean:dist": "rm -rf dist && mkdir dist",
         "clean:tmp": "rm -rf tmp && mkdir tmp",
         "clean:data": "rm -rf data && mkdir data",
-        "clean": "npm run clean:dist && npm run clean:tmp && npm run clean:data"
+        "clean": "npm run clean:dist && npm run clean:tmp && npm run clean:data",
+        "view": "mbtiles-server --cache dist --port 8081 & http-server ."
     },
     "keywords": [],
     "author": "Alex Fedosov",
@@ -30,7 +31,9 @@
         "canvas": "^2.6.1",
         "flatbush": "^3.3.0",
         "geojson-vt": "^3.2.1",
+        "http-server": "^0.12.3",
         "mapbox-vector-tile": "^0.3.0",
+        "mbtiles-server": "^3.3.4",
         "mkdirp": "^1.0.4",
         "node-fetch": "^2.6.1",
         "parse-svg-path": "^0.1.2",

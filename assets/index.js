@@ -5,7 +5,7 @@ const mapboxAccessToken =
 const layersContainer = document.querySelector('#layers-container');
 const stylesContainer = document.querySelector('#mapstyle-list');
 const woodsContainer = document.querySelector('#woods-list');
-const disabledLayers = new Set();
+const disabledLayers = new Set(['Landuse-nationalpark']);
 
 const styles = [];
 let styleIndex = 0;
@@ -148,7 +148,7 @@ function switchStyle(index, options) {
                 type: 'vector',
                 minzoom: woodset.settings.minZoom,
                 maxzoom: woodset.settings.maxZoom,
-                tiles: [baseUrl + `dist/${woodset.id}/{z}_{x}_{y}.pbf`],
+                tiles: [`http://localhost:8081/${woodset.id}/{z}/{x}/{y}`],
             };
 
             woodsLayer['source'] = woodset.id;
