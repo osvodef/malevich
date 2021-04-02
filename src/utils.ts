@@ -1,5 +1,10 @@
+import zlib from 'zlib';
+import { promisify } from 'util';
 import { extent, padding } from './constants';
 import { Bound, Coords, Point } from './types';
+
+export const inflate = promisify(zlib.inflate);
+export const deflate = promisify(zlib.deflate);
 
 export function lngLatToMercator(lngLat: Point): Point {
     const lng = lngLat[0];
@@ -71,21 +76,27 @@ export function formatPercent(count: number, total: number): string {
     return value < 10 ? ` ${string}` : string;
 }
 
-export function getTileList(bound: Bound, zoom: number): Coords[] {
+export function getTileList(bound: Bound, minZoom: number, maxZoom?: number): Coords[] {
+    if (maxZoom === undefined) {
+        maxZoom = minZoom;
+    }
+
     const [minX, minY] = lngLatToMercator([bound.minX, bound.maxY]);
     const [maxX, maxY] = lngLatToMercator([bound.maxX, bound.minY]);
 
     const tileList: Coords[] = [];
 
-    const tileSize = 1 / 2 ** zoom;
-    const minXCoord = Math.floor(minX / tileSize);
-    const minYCoord = Math.floor(minY / tileSize);
-    const maxXCoord = Math.floor(maxX / tileSize);
-    const maxYCoord = Math.floor(maxY / tileSize);
+    for (let zoom = minZoom; zoom <= maxZoom; zoom++) {
+        const tileSize = 1 / 2 ** zoom;
+        const minXCoord = Math.floor(minX / tileSize);
+        const minYCoord = Math.floor(minY / tileSize);
+        const maxXCoord = Math.floor(maxX / tileSize);
+        const maxYCoord = Math.floor(maxY / tileSize);
 
-    for (let x = minXCoord; x <= maxXCoord; x++) {
-        for (let y = minYCoord; y <= maxYCoord; y++) {
-            tileList.push([zoom, x, y]);
+        for (let x = minXCoord; x <= maxXCoord; x++) {
+            for (let y = minYCoord; y <= maxYCoord; y++) {
+                tileList.push([zoom, x, y]);
+            }
         }
     }
 

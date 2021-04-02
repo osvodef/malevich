@@ -1,8 +1,6 @@
-import { coordsToBound, coordsToKey, getChildren, lngLatToMercator } from './utils';
 import { createCanvas, createImageData, CanvasRenderingContext2D } from 'canvas';
-import { deflate, fromRgba, inflate, squash, toRgba } from './rasters';
+import { fromRgba, squash, toRgba } from './rasters';
 import { MultiPolygon, Polygon } from 'geojson';
-import { Coords, SomeObject } from './types';
 import { createGeoJson } from './geojson';
 import { simplifyRing } from './simplify';
 import { convolute } from './convolute';
@@ -11,6 +9,7 @@ import { promises as fs } from 'fs';
 import { parsePath } from './path';
 import geojsonvt from 'geojson-vt';
 import { readFileSync } from 'fs';
+import { Coords } from './types';
 import { trace } from './trace';
 import Flatbush from 'flatbush';
 import * as path from 'path';
@@ -23,13 +22,21 @@ import {
     maxZoom,
     savePng,
 } from './constants';
+import {
+    lngLatToMercator,
+    coordsToBound,
+    coordsToKey,
+    getChildren,
+    deflate,
+    inflate,
+} from './utils';
 
 const tmpPath = path.join(__dirname, '..', 'tmp');
-const distPath = path.join(__dirname, '..', 'dist');
+const dataPath = path.join(__dirname, '..', 'data');
 
-const tree = Flatbush.from(readFileSync(path.join(tmpPath, 'tree.bin')).buffer);
-const pointers = new Float64Array(readFileSync(path.join(tmpPath, 'pointers.bin')).buffer);
-const dataPromise = fs.open(path.join(tmpPath, 'geometries.bin'), 'r');
+const tree = Flatbush.from(readFileSync(path.join(dataPath, 'tree.bin')).buffer);
+const pointers = new Float64Array(readFileSync(path.join(dataPath, 'pointers.bin')).buffer);
+const dataPromise = fs.open(path.join(dataPath, 'geometries.bin'), 'r');
 
 interface Pointer {
     offset: number;
@@ -37,11 +44,9 @@ interface Pointer {
 }
 
 module.exports = async function generalizeTile(
-    args: SomeObject,
+    coords: Coords,
     callback: () => void,
 ): Promise<void> {
-    const { id, coords } = args;
-
     const zoom = coords[0];
     const x = coords[1];
     const y = coords[2];
@@ -92,7 +97,7 @@ module.exports = async function generalizeTile(
 
     const buffer = fromGeojsonVt({ polygons: tile });
 
-    await fs.writeFile(path.join(distPath, id, `${tileKey}.pbf`), buffer);
+    await fs.writeFile(path.join(tmpPath, `${tileKey}.pbf`), buffer);
 
     callback();
 };

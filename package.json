@@ -5,10 +5,11 @@
     "scripts": {
         "lint": "tslint -p tsconfig.json 'src/**/*.ts'",
         "prettier": "prettier --check \"./src/**/*.ts\"",
-        "generalize": "ts-node --log-error --files src/index.ts",
+        "generalize": "npm run clean:tmp && ts-node --log-error --files src/index.ts",
         "clean:dist": "rm -rf dist && mkdir dist",
         "clean:tmp": "rm -rf tmp && mkdir tmp",
-        "clean": "npm run clean:dist && npm run clean:tmp"
+        "clean:data": "rm -rf data && mkdir data",
+        "clean": "npm run clean:dist && npm run clean:tmp && npm run clean:data"
     },
     "keywords": [],
     "author": "Alex Fedosov",
@@ -24,6 +25,7 @@
         "typescript": "^3.9.7"
     },
     "dependencies": {
+        "@mapbox/mbtiles": "^0.12.1",
         "@turf/turf": "^6.3.0",
         "canvas": "^2.6.1",
         "flatbush": "^3.3.0",

@@ -1,4 +1,12 @@
-import { fnv32b, formatPercent, getElapsed, getTileList, rightPad, toSeconds } from './utils';
+import {
+    coordsToKey,
+    fnv32b,
+    formatPercent,
+    getElapsed,
+    getTileList,
+    rightPad,
+    toSeconds,
+} from './utils';
 import { Settings, Tileset } from './types';
 import { indexify } from './indexify';
 import { Workers } from './workers';
@@ -13,9 +21,11 @@ import {
     minZoom,
     maxZoom,
 } from './constants';
+import { TileWriter } from './mbtiles';
 
-const inputPath = path.join(__dirname, '..', '..', '..', 'woods100000.geojson');
+const inputPath = path.join(__dirname, '..', '..', '..', 'woods.geojson');
 const distPath = path.join(__dirname, '..', 'dist');
+const dataPath = path.join(__dirname, '..', 'data');
 const tmpPath = path.join(__dirname, '..', 'tmp');
 
 run();
@@ -32,56 +42,64 @@ async function run(): Promise<void> {
     };
 
     const id = fnv32b(JSON.stringify(settings));
-    const outputPath = path.join(distPath, id);
 
-    if (fs.existsSync(outputPath)) {
-        fs.rmdirSync(outputPath, { recursive: true });
-    }
-    fs.mkdirSync(outputPath);
-
-    console.log('Step 1 of 2: indexing input data...');
-    const startTime = Date.now();
+    console.log('Step 1 of 3: indexing input data...');
+    let startTime = Date.now();
 
     await indexify(inputPath);
 
     console.log(`\n⣿ Done in ${getElapsed(startTime)}s.`);
 
-    const bound = JSON.parse(fs.readFileSync(path.join(tmpPath, 'bound.json'), 'utf8'));
+    const bound = JSON.parse(fs.readFileSync(path.join(dataPath, 'bound.json'), 'utf8'));
     const farm = new Workers(require.resolve('./generalize'));
 
-    console.log(`\nStep 2 of 2: rendering tiles for zoom levels ${maxZoom} to ${minZoom}...`);
+    console.log(`\nStep 2 of 3: rendering tiles for zoom levels ${maxZoom} to ${minZoom}...`);
 
     for (let zoom = maxZoom; zoom >= minZoom; zoom--) {
         const tileList = getTileList(bound, zoom);
-        const total = tileList.length;
-        const args = tileList.map(coords => ({ coords, id }));
 
         console.log(`* Starting zoom level ${zoom}:`);
         const startTime = Date.now();
 
-        await farm.run(args, count => {
-            const elapsedTime = Date.now() - startTime;
-            const totalTime = (elapsedTime / count) * total;
-            const remainingTime = totalTime - elapsedTime;
-
-            const spinner =
-                count < total
-                    ? String.fromCharCode(0x2801 + Math.floor(Math.random() * 254))
-                    : String.fromCharCode(0x28ff);
-
-            const percent = formatPercent(count, total);
-            const eta = toSeconds(remainingTime);
-
-            const message = `${spinner} [${percent}%] Rendered ${count} of ${total}. ETA: ~${eta}s.`;
-
-            process.stdout.write(`\r${rightPad(message, process.stdout.columns)}`);
+        await farm.run(tileList, count => {
+            printProgressMessage('Rendered', startTime, count, tileList.length);
         });
 
-        const timePerTile = Math.round((Date.now() - startTime) / total);
-        console.log(`\n⣿ Done in ${getElapsed(startTime)}s (~${timePerTile}ms per tile).`);
+        printCompletionMessage(startTime, tileList.length);
     }
 
     farm.end();
+
+    console.log(`\nStep 3 of 3: Generating MBtiles file...`);
+    startTime = Date.now();
+
+    const mbtilesPath = path.join(distPath, `${id}.mbtiles`);
+
+    fs.rmSync(mbtilesPath, { force: true });
+
+    const tileWriter = new TileWriter(path.join(distPath, `${id}.mbtiles`));
+    const tileList = getTileList(bound, minZoom, maxZoom);
+
+    await tileWriter.startWriting();
+
+    for (let i = 0; i < tileList.length; i++) {
+        const coords = tileList[i];
+        const count = i + 1;
+        const total = tileList.length;
+
+        try {
+            const buffer = await fs.promises.readFile(
+                path.join(tmpPath, `${coordsToKey(coords)}.pbf`),
+            );
+            await tileWriter.putTile(coords, buffer);
+        } catch (e) {}
+
+        printProgressMessage('Wrote', startTime, count, total);
+    }
+
+    await tileWriter.stopWriting();
+
+    printCompletionMessage(startTime, tileList.length);
 
     const tilesetsPath = path.join(distPath, 'tilesets.json');
 
@@ -96,4 +114,27 @@ async function run(): Promise<void> {
     fs.writeFileSync(tilesetsPath, JSON.stringify(newTilesets, null, 4));
 
     console.log('\nDone.');
+}
+
+function printProgressMessage(word: string, startTime: number, count: number, total: number): void {
+    const elapsedTime = Date.now() - startTime;
+    const totalTime = (elapsedTime / count) * total;
+    const remainingTime = totalTime - elapsedTime;
+
+    const spinner =
+        count < total
+            ? String.fromCharCode(0x2801 + Math.floor(Math.random() * 254))
+            : String.fromCharCode(0x28ff);
+
+    const percent = formatPercent(count, total);
+    const eta = toSeconds(remainingTime);
+
+    const message = `${spinner} [${percent}%] ${word} ${count} of ${total}. ETA: ~${eta}s.`;
+
+    process.stdout.write(`\r${rightPad(message, process.stdout.columns)}`);
+}
+
+function printCompletionMessage(startTime: number, total: number): void {
+    const timePerTile = Math.round((Date.now() - startTime) / total);
+    console.log(`\n⣿ Done in ${getElapsed(startTime)}s (~${timePerTile}ms per tile).`);
 }

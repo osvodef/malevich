@@ -38,3 +38,17 @@ declare module 'geojson-vt' {
 declare module 'vt-pbf' {
     export function fromGeojsonVt(mapping: { [layer: string]: VectorTile }): Buffer;
 }
+
+declare module '@mapbox/mbtiles' {
+    type Callback = (err?: Error) => void;
+
+    export interface Handle {
+        startWriting: (callback: Callback) => void;
+        stopWriting: (callback: Callback) => void;
+        putTile: (z: number, x: number, y: number, buffer: Buffer, callback: Callback) => void;
+    }
+
+    export default class {
+        constructor(path: string, callback: (err?: Error, mbtiles: Handle) => void);
+    }
+}

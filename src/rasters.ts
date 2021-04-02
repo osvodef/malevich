@@ -1,5 +1,3 @@
-import zlib from 'zlib';
-import { promisify } from 'util';
 import { canvasPadding, canvasSize, rasterSize } from './constants';
 
 export function toRgba(input: Uint8ClampedArray): Uint8ClampedArray {
@@ -24,9 +22,6 @@ export function fromRgba(input: Uint8ClampedArray): Uint8ClampedArray {
 
     return output;
 }
-
-export const inflate = promisify(zlib.inflate);
-export const deflate = promisify(zlib.deflate);
 
 export function squash(rasters: Array<Uint8ClampedArray | undefined>): Uint8ClampedArray {
     const pixels = new Uint8ClampedArray(canvasSize * canvasSize);

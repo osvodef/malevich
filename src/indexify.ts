@@ -8,22 +8,22 @@ import Flatbush from 'flatbush';
 import { Bound } from './bound';
 import * as path from 'path';
 
-const tmpPath = path.join(__dirname, '..', 'tmp');
+const dataPath = path.join(__dirname, '..', 'data');
 
 export async function indexify(inputPath: string): Promise<void> {
     const indexExists =
-        existsSync(path.join(tmpPath, 'geometries.bin')) &&
-        existsSync(path.join(tmpPath, 'pointers.bin')) &&
-        existsSync(path.join(tmpPath, 'tree.bin')) &&
-        existsSync(path.join(tmpPath, 'bound.json'));
+        existsSync(path.join(dataPath, 'geometries.bin')) &&
+        existsSync(path.join(dataPath, 'pointers.bin')) &&
+        existsSync(path.join(dataPath, 'tree.bin')) &&
+        existsSync(path.join(dataPath, 'bound.json'));
 
     if (indexExists) {
-        process.stdout.write('⣿ Using existing index from ./tmp');
+        process.stdout.write('⣿ Using existing index from ./data');
 
         return;
     }
 
-    const dataFile = createWriteStream(path.join(tmpPath, 'geometries.bin'));
+    const dataFile = createWriteStream(path.join(dataPath, 'geometries.bin'));
 
     const globalBound = new Bound();
 
@@ -96,9 +96,9 @@ export async function indexify(inputPath: string): Promise<void> {
 
     const pointersArray = new Float64Array(pointers);
 
-    await fs.writeFile(path.join(tmpPath, 'pointers.bin'), Buffer.from(pointersArray.buffer));
-    await fs.writeFile(path.join(tmpPath, 'tree.bin'), Buffer.from(tree.data));
-    await fs.writeFile(path.join(tmpPath, 'bound.json'), JSON.stringify(globalBound));
+    await fs.writeFile(path.join(dataPath, 'pointers.bin'), Buffer.from(pointersArray.buffer));
+    await fs.writeFile(path.join(dataPath, 'tree.bin'), Buffer.from(tree.data));
+    await fs.writeFile(path.join(dataPath, 'bound.json'), JSON.stringify(globalBound));
 }
 
 function printProgress(index: number, finished: boolean): void {
