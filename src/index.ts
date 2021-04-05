@@ -75,7 +75,9 @@ async function run(): Promise<void> {
 
     const mbtilesPath = path.join(distPath, `${id}.mbtiles`);
 
-    fs.rmSync(mbtilesPath, { force: true });
+    if (fs.existsSync(mbtilesPath)) {
+        fs.unlinkSync(mbtilesPath);
+    }
 
     const tileWriter = new TileWriter(path.join(distPath, `${id}.mbtiles`));
     const tileList = getTileList(bound, minZoom, maxZoom);
