@@ -1,11 +1,11 @@
 import {
-    coordsToKey,
-    fnv32b,
     formatPercent,
-    getElapsed,
     getTileList,
+    coordsToKey,
+    formatTime,
+    getElapsed,
     rightPad,
-    toSeconds,
+    fnv32b,
 } from './utils';
 import { Settings, Tileset } from './types';
 import { indexify } from './indexify';
@@ -44,11 +44,11 @@ async function run(): Promise<void> {
     const id = fnv32b(JSON.stringify(settings));
 
     console.log('Step 1 of 3: indexing input data...');
-    let startTime = Date.now();
+    const startTime = Date.now();
 
     await indexify(inputPath);
 
-    console.log(`\n⣿ Done in ${getElapsed(startTime)}s.`);
+    console.log(`\n⣿ Done in ${formatTime(getElapsed(startTime))}.`);
 
     const bound = JSON.parse(fs.readFileSync(path.join(dataPath, 'bound.json'), 'utf8'));
     const farm = new Workers(require.resolve('./generalize'));
@@ -62,16 +62,16 @@ async function run(): Promise<void> {
         const startTime = Date.now();
 
         await farm.run(tileList, count => {
-            printProgressMessage('Rendered', startTime, count, tileList.length);
+            printProgressMessage('Rendered', startTime, count, tileList.length, 2);
         });
 
-        printCompletionMessage(startTime, tileList.length);
+        printCompletionMessage(startTime, tileList.length, 2);
     }
 
     farm.end();
 
     console.log(`\nStep 3 of 3: Generating MBtiles file...`);
-    startTime = Date.now();
+    const mbTilesStartTime = Date.now();
 
     const mbtilesPath = path.join(distPath, `${id}.mbtiles`);
 
@@ -96,12 +96,12 @@ async function run(): Promise<void> {
             await tileWriter.putTile(coords, buffer);
         } catch (e) {}
 
-        printProgressMessage('Wrote', startTime, count, total);
+        printProgressMessage('Wrote', mbTilesStartTime, count, total, 0);
     }
 
     await tileWriter.stopWriting();
 
-    printCompletionMessage(startTime, tileList.length);
+    printCompletionMessage(mbTilesStartTime, tileList.length, 0);
 
     const tilesetsPath = path.join(distPath, 'tilesets.json');
 
@@ -115,10 +115,16 @@ async function run(): Promise<void> {
 
     fs.writeFileSync(tilesetsPath, JSON.stringify(newTilesets, null, 4));
 
-    console.log('\nDone.');
+    console.log(`\nDone in ${formatTime(getElapsed(startTime))}.`);
 }
 
-function printProgressMessage(word: string, startTime: number, count: number, total: number): void {
+function printProgressMessage(
+    word: string,
+    startTime: number,
+    count: number,
+    total: number,
+    indent: number,
+): void {
     const elapsedTime = Date.now() - startTime;
     const totalTime = (elapsedTime / count) * total;
     const remainingTime = totalTime - elapsedTime;
@@ -129,14 +135,20 @@ function printProgressMessage(word: string, startTime: number, count: number, to
             : String.fromCharCode(0x28ff);
 
     const percent = formatPercent(count, total);
-    const eta = toSeconds(remainingTime);
+    const eta = formatTime(remainingTime);
 
-    const message = `${spinner} [${percent}%] ${word} ${count} of ${total}. ETA: ~${eta}s.`;
+    const spacing = ' '.repeat(indent);
+
+    const message = `${spacing}${spinner} [${percent}%] ${word} ${count} of ${total}. ETA: ~${eta}.`;
 
     process.stdout.write(`\r${rightPad(message, process.stdout.columns)}`);
 }
 
-function printCompletionMessage(startTime: number, total: number): void {
+function printCompletionMessage(startTime: number, total: number, indent: number): void {
     const timePerTile = Math.round((Date.now() - startTime) / total);
-    console.log(`\n⣿ Done in ${getElapsed(startTime)}s (~${timePerTile}ms per tile).`);
+    const spacing = ' '.repeat(indent);
+
+    console.log(
+        `\n${spacing}⣿ Done in ${formatTime(getElapsed(startTime))} (~${timePerTile}ms per tile).`,
+    );
 }

@@ -100,6 +100,8 @@ export function getTileList(bound: Bound, minZoom: number, maxZoom?: number): Co
         }
     }
 
+    shuffle(tileList);
+
     return tileList;
 }
 
@@ -120,13 +122,48 @@ export function getChildren(coords: Coords): Coords[] {
 }
 
 export function getElapsed(startTime: number): number {
-    return toSeconds(Date.now() - startTime);
-}
-
-export function toSeconds(ms: number): number {
-    return Math.round(ms / 1000);
+    return Date.now() - startTime;
 }
 
 export function rightPad(string: string, length: number): string {
     return string + ' '.repeat(Math.max(0, length - string.length));
+}
+
+export function formatTime(ms: number): string {
+    const seconds = Math.round(ms / 1000);
+
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor(seconds / 60) % 60;
+    const s = seconds % 60;
+
+    let result = '';
+
+    if (h > 0) {
+        result += `${h}h `;
+    }
+
+    if (h > 0 || m > 0) {
+        result += `${m}m `;
+    }
+
+    result += `${s}s`;
+
+    return result;
+}
+
+export function shuffle<T>(array: T[]): void {
+    let m = array.length;
+    let t;
+    let i;
+
+    // While there remain elements to shuffle…
+    while (m) {
+        // Pick a remaining element…
+        i = Math.floor(Math.random() * m--);
+
+        // And swap it with the current element.
+        t = array[m];
+        array[m] = array[i];
+        array[i] = t;
+    }
 }

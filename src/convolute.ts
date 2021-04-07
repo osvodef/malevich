@@ -16,6 +16,10 @@ export function convolute(imageData: ImageData, radius: number): void {
         pixels[i + 2] = value;
     }
 
+    if (radius < 1) {
+        return;
+    }
+
     const result = new Uint8Array(width * height);
 
     for (let i = 0; i < width; i++) {
