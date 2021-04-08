@@ -1,0 +1,50 @@
+[
+    {
+        "id": "355193cd",
+        "settings": {
+            "minZoom": 0,
+            "maxZoom": 8,
+            "turdSize": 1,
+            "threshold": 0.5,
+            "rasterSize": 1024,
+            "convolutionRadius": 4,
+            "simplificationTolerance": 1
+        }
+    },
+    {
+        "id": "99b68c0a",
+        "settings": {
+            "minZoom": 0,
+            "maxZoom": 8,
+            "turdSize": 1,
+            "threshold": 0.5,
+            "rasterSize": 1024,
+            "convolutionRadius": 2,
+            "simplificationTolerance": 1
+        }
+    },
+    {
+        "id": "9013f849",
+        "settings": {
+            "minZoom": 0,
+            "maxZoom": 8,
+            "turdSize": 1,
+            "threshold": 0.5,
+            "rasterSize": 1024,
+            "convolutionRadius": 1,
+            "simplificationTolerance": 1
+        }
+    },
+    {
+        "id": "png",
+        "settings": {
+            "minZoom": 0,
+            "maxZoom": 8,
+            "turdSize": 1,
+            "threshold": 0.5,
+            "rasterSize": 1024,
+            "convolutionRadius": 1,
+            "simplificationTolerance": 1
+        }
+    }
+]
