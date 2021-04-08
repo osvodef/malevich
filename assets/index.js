@@ -83,7 +83,7 @@ async function run() {
     map.on('move', () => dimLayers());
     map.on('idle', () => rerenderLayers());
 
-    map.showTileBoundaries = true;
+    map.showTileBoundaries = false;
     map.showCollisionBoxes = false;
     map.showOverdrawInspector = false;
 
