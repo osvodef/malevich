@@ -184,11 +184,11 @@ function switchStyle(index, options) {
             let url;
 
             if (type === 'raster') {
-                url = `${baseUrl}/dist/${woodset.id}/{z}_{x}_{y}.pbf`;
+                url = `${baseUrl}dist/${woodset.id}/{z}_{x}_{y}.pbf`;
             } else if (type === 'buffer') {
                 url = `${woodset.url}/{z}/{x}/{y}`;
             } else {
-                url = `${baseUrl}/dist/${woodset.id}/{z}_{x}_{y}.png`;
+                url = `${baseUrl}dist/${woodset.id}/{z}_{x}_{y}.png`;
             }
 
             sources[woodset.id] = {
