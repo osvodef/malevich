@@ -33,6 +33,7 @@ import {
 
 const tmpPath = path.join(__dirname, '..', 'tmp');
 const dataPath = path.join(__dirname, '..', 'data');
+const distPath = path.join(__dirname, '..', 'dist');
 
 const tree = Flatbush.from(readFileSync(path.join(dataPath, 'tree.bin')).buffer);
 const pointers = new Float64Array(readFileSync(path.join(dataPath, 'pointers.bin')).buffer);
@@ -44,9 +45,11 @@ interface Pointer {
 }
 
 module.exports = async function generalizeTile(
-    coords: Coords,
+    args: { coords: Coords; id: string },
     callback: () => void,
 ): Promise<void> {
+    const { coords, id } = args;
+
     const zoom = coords[0];
     const x = coords[1];
     const y = coords[2];
@@ -71,7 +74,8 @@ module.exports = async function generalizeTile(
     );
 
     if (savePng) {
-        await fs.writeFile(path.join(tmpPath, `${tileKey}.png`), canvas.toBuffer());
+        await fs.writeFile(path.join(distPath, id, `${tileKey}.png`), canvas.toBuffer());
+        return callback();
     }
 
     convolute(imageData, convolutionRadius);
@@ -97,7 +101,7 @@ module.exports = async function generalizeTile(
 
     const buffer = fromGeojsonVt({ polygons: tile });
 
-    await fs.writeFile(path.join(tmpPath, `${tileKey}.pbf`), buffer);
+    await fs.writeFile(path.join(distPath, id, `${tileKey}.pbf`), buffer);
 
     callback();
 };

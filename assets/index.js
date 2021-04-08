@@ -4,15 +4,36 @@ const mapboxAccessToken =
 
 const layersContainer = document.querySelector('#layers-container');
 const stylesContainer = document.querySelector('#mapstyle-list');
-const woodsContainer = document.querySelector('#woods-list');
+const bufferContainer = document.querySelector('#buffer-list');
+const rasterContainer = document.querySelector('#raster-list');
+const pngContainer = document.querySelector('#png-list');
 const disabledLayers = new Set(['Landuse-nationalpark']);
 
 const styles = [];
 let styleIndex = 0;
 let layersDimmed = false;
 
-const woodsets = [];
-let woodsetId = 'original';
+const woodsets = [
+    {
+        id: 'buffer4px',
+        name: '@ 4px',
+        type: 'original',
+        url: 'https://vapi.bleeding.mc-cdn.io/dataset/test_forest_s_8',
+    },
+    {
+        id: 'buffer8px',
+        name: '@ 8px',
+        type: 'buffer',
+        url: 'https://vapi.bleeding.mc-cdn.io/dataset/test_forest_s_8',
+    },
+    {
+        id: 'buffer8px1.5ms',
+        name: '@ 8px (1.5 minSurfaceFactor)',
+        type: 'buffer',
+        url: 'https://vapi.bleeding.mc-cdn.io/dataset/test_forest_s_8_ms_1_5',
+    },
+];
+let woodsetIndex = 0;
 let woodOutlines = false;
 
 let minVertices = 0;
@@ -40,6 +61,8 @@ async function run() {
         zoom: 7,
         center: [10, 50],
         hash: true,
+        minZoom: 0,
+        maxZoom: 9,
         transformRequest: url => {
             return { url: transformResourceUrl(url) };
         },
@@ -124,7 +147,19 @@ async function loadInitialStyles() {
 async function loadWoodsets() {
     const tilesets = await fetch('./dist/tilesets.json').then(response => response.json());
 
-    woodsets.push(...tilesets);
+    tilesets.reverse();
+
+    for (const tileset of tilesets) {
+        woodsets.push({
+            id: tileset.id,
+            type: tileset.id === 'png' ? 'png' : 'raster',
+            name: `@ ${tileset.settings.convolutionRadius}px`,
+        });
+    }
+
+    for (let i = 0; i < woodsets.length; i++) {
+        woodsets[i].index = i;
+    }
 }
 
 function addStyle(name, style) {
@@ -137,24 +172,45 @@ function switchStyle(index, options) {
     const style = JSON.parse(JSON.stringify(styles[styleIndex].style));
     const { sources, layers } = style;
 
-    const woodset = woodsets.find(woodset => woodset.id === woodsetId);
+    const woodset = woodsets[woodsetIndex];
     const woodsLayer = layers.find(layer => layer.id === 'Landuse-wood');
 
     if (woodsLayer !== undefined) {
-        if (woodsetId !== 'original') {
+        const { type } = woodset;
+
+        if (type !== 'original') {
             const baseUrl = location.href.replace(location.hash, '');
 
+            let url;
+
+            if (type === 'raster') {
+                url = `${baseUrl}/dist/${woodset.id}/{z}_{x}_{y}.pbf`;
+            } else if (type === 'buffer') {
+                url = `${woodset.url}/{z}/{x}/{y}`;
+            } else {
+                url = `${baseUrl}/dist/${woodset.id}/{z}_{x}_{y}.png`;
+            }
+
             sources[woodset.id] = {
-                type: 'vector',
-                minzoom: woodset.settings.minZoom,
-                maxzoom: woodset.settings.maxZoom,
-                tiles: [`http://localhost:8081/${woodset.id}/{z}/{x}/{y}`],
+                type: type === 'png' ? 'raster' : 'vector',
+                minzoom: 0,
+                maxzoom: 8,
+                tiles: [url],
             };
 
-            woodsLayer['source'] = woodset.id;
-            woodsLayer['source-layer'] = 'polygons';
+            if (type === 'png') {
+                layers.length = 0;
+                layers.push({
+                    id: woodset.id,
+                    type: 'raster',
+                    source: woodset.id,
+                });
+            } else {
+                woodsLayer['source-layer'] = 'polygons';
+                woodsLayer['source'] = woodset.id;
 
-            delete woodsLayer.filter;
+                delete woodsLayer.filter;
+            }
         }
 
         woodsLayer.minzoom = 0;
@@ -266,58 +322,56 @@ function getStyleHtml(index) {
 }
 
 function rerenderWoods() {
-    const allWoodsets = [{ id: 'original' }].concat(woodsets);
-    const html = allWoodsets
+    const bufferHtml = woodsets
+        .filter(woodset => woodset.type === 'buffer' || woodset.type === 'original')
         .map(woodset => {
-            const { id, settings, telemetry } = woodset;
-            const active = id === woodsetId ? 'active' : '';
+            const active = woodset.index === woodsetIndex ? 'active' : '';
 
-            let text;
-
-            if (id === 'original') {
-                text = `<span class="title">Original</span>`;
-            } else {
-                text = `
-                    <span class="title">Generalized @ ${settings.convolutionRadius}px</span>
-                    <p class="description">
-                        Raster size: <b>${settings.rasterSize}px</b>
-                        <br>
-                        Convolution radius: <b>${settings.convolutionRadius}px</b>
-                        <br>
-                        Simplification tolerance: <b>${settings.simplificationTolerance}px</b>
-                        <br>
-                        Despeckling tolerance: <b>${settings.turdSize}px²</b>
-                        <br>
-                        Threshold: <b>${settings.threshold * 100}%</b>
-                    </p>
-                `;
-            }
-
-            return `<div class="button woods ${active}" data-id="${id}">${text}</div>`;
+            return `
+                <div class="button woods ${active}" data-id="${woodset.index}">
+                    <span class="title">${woodset.name}</span>
+                </div>
+            `;
         })
         .join('');
 
-    woodsContainer.innerHTML = html;
+    bufferContainer.innerHTML = bufferHtml;
+
+    const rasterHtml = woodsets
+        .filter(woodset => woodset.type === 'raster')
+        .map(woodset => {
+            const active = woodset.index === woodsetIndex ? 'active' : '';
+
+            return `
+                <div class="button woods ${active}" data-id="${woodset.index}">
+                    <span class="title">${woodset.name}</span>
+                </div>
+            `;
+        })
+        .join('');
+
+    rasterContainer.innerHTML = rasterHtml;
+
+    const pngHtml = woodsets
+        .filter(woodset => woodset.type === 'png')
+        .map(woodset => {
+            const active = woodset.index === woodsetIndex ? 'active' : '';
+
+            return `
+                <div class="button woods ${active}" data-id="${woodset.index}">
+                    <span class="title">PNGs</span>
+                </div>
+            `;
+        })
+        .join('');
+
+    pngContainer.innerHTML = pngHtml;
 
     document.querySelectorAll('.button.woods').forEach(element => {
         element.addEventListener('click', () => {
-            woodsetId = element.dataset.id;
+            woodsetIndex = Number(element.dataset.id);
 
             rerenderWoods();
-
-            if (woodsetId !== 'original') {
-                const woodset = woodsets.find(woodset => woodset.id === woodsetId);
-                const { minZoom, maxZoom } = woodset.settings;
-
-                map.setMinZoom();
-                map.setMaxZoom();
-
-                map.setMinZoom(minZoom);
-                map.setMaxZoom(maxZoom + 1);
-            } else {
-                map.setMinZoom();
-                map.setMaxZoom();
-            }
 
             switchStyle(styleIndex);
         });

@@ -1,12 +1,4 @@
-import {
-    formatPercent,
-    getTileList,
-    coordsToKey,
-    formatTime,
-    getElapsed,
-    rightPad,
-    fnv32b,
-} from './utils';
+import { formatPercent, getTileList, formatTime, getElapsed, rightPad } from './utils';
 import { Settings, Tileset } from './types';
 import { indexify } from './indexify';
 import { Workers } from './workers';
@@ -21,12 +13,10 @@ import {
     minZoom,
     maxZoom,
 } from './constants';
-import { TileWriter } from './mbtiles';
 
 const inputPath = path.join(__dirname, '..', '..', '..', 'woods.geojson');
 const distPath = path.join(__dirname, '..', 'dist');
 const dataPath = path.join(__dirname, '..', 'data');
-const tmpPath = path.join(__dirname, '..', 'tmp');
 
 run();
 
@@ -41,9 +31,11 @@ async function run(): Promise<void> {
         simplificationTolerance,
     };
 
-    const id = fnv32b(JSON.stringify(settings));
+    const id = 'rasters';
 
-    console.log('Step 1 of 3: indexing input data...');
+    fs.mkdirSync(path.join(distPath, id));
+
+    console.log('Step 1 of 2: indexing input data...');
     const startTime = Date.now();
 
     await indexify(inputPath);
@@ -53,7 +45,7 @@ async function run(): Promise<void> {
     const bound = JSON.parse(fs.readFileSync(path.join(dataPath, 'bound.json'), 'utf8'));
     const farm = new Workers(require.resolve('./generalize'));
 
-    console.log(`\nStep 2 of 3: rendering tiles for zoom levels ${maxZoom} to ${minZoom}...`);
+    console.log(`\nStep 2 of 2: rendering tiles for zoom levels ${maxZoom} to ${minZoom}...`);
 
     for (let zoom = maxZoom; zoom >= minZoom; zoom--) {
         const tileList = getTileList(bound, zoom);
@@ -61,47 +53,17 @@ async function run(): Promise<void> {
         console.log(`* Starting zoom level ${zoom}:`);
         const startTime = Date.now();
 
-        await farm.run(tileList, count => {
-            printProgressMessage('Rendered', startTime, count, tileList.length, 2);
-        });
+        await farm.run(
+            tileList.map(coords => ({ coords, id })),
+            count => {
+                printProgressMessage('Rendered', startTime, count, tileList.length, 2);
+            },
+        );
 
         printCompletionMessage(startTime, tileList.length, 2);
     }
 
     farm.end();
-
-    console.log(`\nStep 3 of 3: Generating MBtiles file...`);
-    const mbTilesStartTime = Date.now();
-
-    const mbtilesPath = path.join(distPath, `${id}.mbtiles`);
-
-    if (fs.existsSync(mbtilesPath)) {
-        fs.unlinkSync(mbtilesPath);
-    }
-
-    const tileWriter = new TileWriter(path.join(distPath, `${id}.mbtiles`));
-    const tileList = getTileList(bound, minZoom, maxZoom);
-
-    await tileWriter.startWriting();
-
-    for (let i = 0; i < tileList.length; i++) {
-        const coords = tileList[i];
-        const count = i + 1;
-        const total = tileList.length;
-
-        try {
-            const buffer = await fs.promises.readFile(
-                path.join(tmpPath, `${coordsToKey(coords)}.pbf`),
-            );
-            await tileWriter.putTile(coords, buffer);
-        } catch (e) {}
-
-        printProgressMessage('Wrote', mbTilesStartTime, count, total, 0);
-    }
-
-    await tileWriter.stopWriting();
-
-    printCompletionMessage(mbTilesStartTime, tileList.length, 0);
 
     const tilesetsPath = path.join(distPath, 'tilesets.json');
 
